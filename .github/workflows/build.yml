@@ -1,0 +1,94 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'          # triggers on v1.0.0, v1.2.3, etc.
+  workflow_dispatch:  # lets you trigger manually from GitHub UI
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Vite (React)
+        run: npm run vite -- --mode production
+
+      # Windows only: place wimlib-imagex.exe
+      # You'd store this as a GitHub secret or release asset
+      # For open source, just note it in README
+      - name: Build Electron app
+        run: npx electron-builder --${{ matrix.platform }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flashos-${{ matrix.platform }}
+          path: |
+            dist-electron/*.exe
+            dist-electron/*.AppImage
+            dist-electron/*.dmg
+            dist-electron/*.zip
+          if-no-files-found: ignore
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            ## FlashOS ${{ github.ref_name }}
+
+            Download the installer for your OS below.
+
+            | Platform | File |
+            |----------|------|
+            | Windows  | `FlashOS-Setup-*.exe` |
+            | Linux    | `FlashOS-*.AppImage` |
+            | macOS    | `FlashOS-*.dmg` |
+
+            ### Linux users — install required tools first:
+            ```bash
+            sudo apt install parted dosfstools ntfs-3g rsync wimtools syslinux
+            ```
+
+            ### Note on antivirus warnings
+            The app writes to raw disk devices so antivirus may flag it.
+            This is a false positive — the source code is fully open and auditable here.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
