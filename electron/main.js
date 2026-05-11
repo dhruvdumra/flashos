@@ -307,15 +307,44 @@ async function flashWindows({ isoPath, device, scheme, filesystem, requiresWimSp
   const workDir = path.join(os.tmpdir(), 'flashos-work')
   fs.mkdirSync(workDir, { recursive: true })
 
+  // ── Find free drive letters ────────────────────────────────────────────
+  const usedLetters = getUsedDriveLetters()
+  const dataLetter  = findFreeLetter(usedLetters, ['F', 'G', 'H', 'I', 'J', 'K'])
+  const efiLetter   = scheme === 'gpt' ? findFreeLetter(usedLetters, ['S', 'T', 'U', 'V', 'W'], [dataLetter]) : null
+  if (!dataLetter) throw new Error('No free drive letters available for USB data partition.')
+  if (scheme === 'gpt' && !efiLetter) throw new Error('No free drive letters available for EFI partition.')
+
   // ── Partition ──────────────────────────────────────────────────────────
   send('partitioning', 5, 'Creating partition table...')
   const dpScript = scheme === 'gpt'
-    ? `select disk ${diskNum}\nclean\nconvert gpt\ncreate partition efi size=200\nformat fs=fat32 quick label="EFI"\nassign letter=S\ncreate partition primary\nformat fs=${filesystem} quick label="FlashOS"\nassign letter=F\nexit`
-    : `select disk ${diskNum}\nclean\nconvert mbr\ncreate partition primary\nactive\nformat fs=${filesystem} quick label="FlashOS"\nassign letter=F\nexit`
+    ? [
+        `select disk ${diskNum}`,
+        'clean',
+        'convert gpt',
+        'create partition efi size=200',
+        'format fs=fat32 quick label="EFI"',
+        `assign letter=${efiLetter}`,
+        'create partition primary',
+        `format fs=${filesystem} quick label="FlashOS"`,
+        `assign letter=${dataLetter}`,
+        'exit',
+      ].join('\r\n')
+    : [
+        `select disk ${diskNum}`,
+        'clean',
+        'convert mbr',
+        'create partition primary',
+        'active',
+        `format fs=${filesystem} quick label="FlashOS"`,
+        `assign letter=${dataLetter}`,
+        'exit',
+      ].join('\r\n')
 
   const dpFile = path.join(workDir, 'dp.txt')
   fs.writeFileSync(dpFile, dpScript)
-  await runCmd(`diskpart /s "${dpFile}"`)
+
+  // ✅ FIX: use spawn with shell:false so path is never reparsed by cmd.exe
+  await runSpawn('diskpart', ['/s', dpFile])
   send('formatting', 18, `Formatted ${filesystem.toUpperCase()}`)
 
   // ── Mount ISO ──────────────────────────────────────────────────────────
@@ -329,23 +358,33 @@ async function flashWindows({ isoPath, device, scheme, filesystem, requiresWimSp
 
   // ── Copy files ─────────────────────────────────────────────────────────
   send('copying', 25, 'Copying files...')
-  await runCmdProgress(`robocopy ${isoLetter}:\\ F:\\ /E /NP /NFL /NDL /MT:8`, send, 25, 70, 'copying')
+  await runCmdProgress(
+    `robocopy ${isoLetter}:\\ ${dataLetter}:\\ /E /NP /NFL /NDL /MT:8`,
+    send, 25, 70, 'copying'
+  )
 
   // ── Split install.wim ──────────────────────────────────────────────────
   if (requiresWimSplit && filesystem === 'fat32') {
     send('splitting', 72, 'Splitting install.wim...')
     const wimlibExe = path.join(TOOLS_DIR, 'windows', 'wimlib-imagex.exe')
     if (!fs.existsSync(wimlibExe)) throw new Error('wimlib-imagex.exe missing. See README → tools/windows/')
-    await runCmd(`"${wimlibExe}" split F:\\sources\\install.wim F:\\sources\\install.swm 3800`)
-    try { fs.unlinkSync('F:\\sources\\install.wim') } catch (_) {}
+    await runSpawn(wimlibExe, [
+      'split',
+      `${dataLetter}:\\sources\\install.wim`,
+      `${dataLetter}:\\sources\\install.swm`,
+      '3800',
+    ])
+    try { fs.unlinkSync(`${dataLetter}:\\sources\\install.wim`) } catch (_) {}
   }
 
   // ── Bootloader ─────────────────────────────────────────────────────────
   send('bootloader', 88, 'Installing bootloader...')
   if (scheme === 'gpt') {
-    await runCmd(`bcdboot ${isoLetter}:\\Windows /s S: /f UEFI`).catch(e => console.warn('bcdboot:', e.message))
+    await runSpawn('bcdboot', [`${isoLetter}:\\Windows`, '/s', `${efiLetter}:`, '/f', 'UEFI'])
+      .catch(e => console.warn('bcdboot:', e.message))
   } else {
-    await runCmd(`bootsect /nt60 F: /mbr`).catch(e => console.warn('bootsect:', e.message))
+    await runCmd(`bootsect /nt60 ${dataLetter}: /mbr`)
+      .catch(e => console.warn('bootsect:', e.message))
   }
 
   // ── Unmount ISO ────────────────────────────────────────────────────────
@@ -386,6 +425,23 @@ async function flashMac({ isoPath, device }, send) {
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
+
+/** Shell-free spawn — avoids cmd.exe argument reparsing (fixes diskpart /s bug) */
+function runSpawn(exe, args = []) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(exe, args, { shell: false })
+    let stdout = '', stderr = ''
+    proc.stdout?.on('data', d => { stdout += d.toString() })
+    proc.stderr?.on('data', d => { stderr += d.toString() })
+    proc.on('close', code =>
+      code === 0
+        ? resolve(stdout)
+        : reject(new Error(stderr.trim() || `${exe} exited with code ${code}`))
+    )
+  })
+}
+
+/** General exec helper for commands that are safe to run through the shell */
 function runCmd(cmd) {
   return new Promise((resolve, reject) => {
     exec(cmd, (err, stdout, stderr) => {
@@ -405,6 +461,27 @@ function runCmdProgress(cmd, send, fromPct, toPct, stage) {
     // robocopy exit codes < 8 = success
     proc.on('close', code => (code < 8 ? resolve() : reject(new Error(`Exit ${code}: ${cmd}`))))
   })
+}
+
+/** Returns a Set of currently used drive letters on Windows */
+function getUsedDriveLetters() {
+  try {
+    const out = execSync('wmic logicaldisk get DeviceID /format:csv 2>nul').toString()
+    const letters = new Set()
+    for (const line of out.split('\n')) {
+      const m = line.trim().match(/^[^,]*,([A-Z]):/i)
+      if (m) letters.add(m[1].toUpperCase())
+    }
+    return letters
+  } catch (_) {
+    return new Set()
+  }
+}
+
+/** Finds the first letter from candidates not in usedLetters or excluded list */
+function findFreeLetter(usedLetters, candidates, exclude = []) {
+  const blocked = new Set([...usedLetters, ...exclude.map(l => l.toUpperCase())])
+  return candidates.find(l => !blocked.has(l.toUpperCase())) || null
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -428,3 +505,6 @@ ipcMain.handle('check-tools', async () => {
 
 ipcMain.handle('open-folder', async (_, filePath) => shell.showItemInFolder(filePath))
 ipcMain.handle('get-platform', () => platform)
+
+
+
