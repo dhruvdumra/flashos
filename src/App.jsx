@@ -1,21 +1,30 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { catalog, categories, badgeColors } from './os-catalog'
 import './app.css'
 
+// Fallback API for browser dev mode (when not running in Electron)
 const api = window.flashos || {
   minimize: () => {}, maximize: () => {}, close: () => {},
+  detectFirmware: async () => ({ type: 'uefi', confidence: 'high' }),
+  recommendPartitionSettings: async () => ({
+    scheme: 'gpt', target: 'uefi', filesystem: 'fat32',
+    requiresWimSplit: false, notes: ['Running in demo mode'],
+  }),
+  checkTools: async () => ({}),
+  getPlatform: async () => 'linux',
   downloadISO: async () => '/fake/path/file.iso',
   onDownloadProgress: () => {}, removeDownloadListener: () => {},
-  getUSBDrives: async () => [{ device: '/dev/sdb', name: 'USB Drive (Demo)', size: '32 GB' }],
+  getUSBDrives: async () => [
+    { device: '/dev/sdb', name: 'USB Drive (Demo)', size: '32 GB', sizeBytes: 32e9 },
+  ],
   flashISO: async () => ({ success: true }),
   onFlashProgress: () => {}, removeFlashListener: () => {},
   openFolder: () => {},
-  platform: 'linux',
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 const OsIcon = ({ type, color, size = 28 }) => {
-  const s = { width: size, height: size }
+  const s = { width: size, height: size, flexShrink: 0 }
   const icons = {
     windows: (
       <svg viewBox="0 0 24 24" style={s} fill={color}>
@@ -25,12 +34,9 @@ const OsIcon = ({ type, color, size = 28 }) => {
     ubuntu: (
       <svg viewBox="0 0 24 24" style={s} fill={color}>
         <circle cx="12" cy="12" r="10" fill="none" stroke={color} strokeWidth="2"/>
-        <circle cx="12" cy="4" r="2" fill={color}/>
-        <circle cx="19.2" cy="16" r="2" fill={color}/>
-        <circle cx="4.8" cy="16" r="2" fill={color}/>
-        <line x1="12" y1="4" x2="12" y2="12" stroke={color} strokeWidth="1.5"/>
-        <line x1="19.2" y1="16" x2="12" y2="12" stroke={color} strokeWidth="1.5"/>
-        <line x1="4.8" y1="16" x2="12" y2="12" stroke={color} strokeWidth="1.5"/>
+        <circle cx="12" cy="4" r="2"/>
+        <circle cx="19.2" cy="16" r="2"/>
+        <circle cx="4.8" cy="16" r="2"/>
       </svg>
     ),
     debian: (
@@ -40,148 +46,262 @@ const OsIcon = ({ type, color, size = 28 }) => {
     ),
     arch: (
       <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <path d="M12 2L2 20h20L12 2zm0 3.5l7 12.5H5l7-12.5z" opacity="0.3"/>
         <path d="M12 2L2 20h4l6-15.5L18 20h4L12 2z"/>
       </svg>
     ),
-    default: (
+    fedora: (
       <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <rect x="2" y="3" width="20" height="14" rx="2" fill="none" stroke={color} strokeWidth="2"/>
-        <path d="M8 21h8M12 17v4" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+        <circle cx="12" cy="12" r="10" fill="none" stroke={color} strokeWidth="2"/>
+        <path d="M12 8v8M8 12h8" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    ),
+    mint: (
+      <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2">
+        <path d="M4 12C4 7.58 7.58 4 12 4c2.5 0 4.7 1.15 6.15 2.95-1 .7-2.45.5-3.45-.45-.65 1.65-.4 3.7 1 5.05.4.4.4 1.05 0 1.45-1.4 1.35-1.65 3.4-1 5.05-1-.95-2.45-1.15-3.45-.45C9.7 18.85 7.5 20 5 20"/>
+      </svg>
+    ),
+    pop: (
+      <svg viewBox="0 0 24 24" style={s} fill={color}>
+        <path d="M2 12L12 2l10 10-10 10L2 12zm10-7L5 12l7 7 7-7-7-7z"/>
+      </svg>
+    ),
+    kali: (
+      <svg viewBox="0 0 24 24" style={s} fill={color}>
+        <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
+      </svg>
+    ),
+    manjaro: (
+      <svg viewBox="0 0 24 24" style={s} fill={color}>
+        <rect x="3" y="3" width="6" height="18"/>
+        <rect x="10" y="10" width="5" height="11"/>
+        <rect x="16" y="3" width="5" height="18"/>
+      </svg>
+    ),
+    elementary: (
+      <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2">
+        <circle cx="12" cy="12" r="9"/>
+        <circle cx="12" cy="12" r="3" fill={color}/>
+      </svg>
+    ),
+    default: (
+      <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2">
+        <rect x="2" y="3" width="20" height="14" rx="2"/>
+        <path d="M8 21h8M12 17v4" strokeLinecap="round"/>
       </svg>
     ),
   }
   return icons[type] || icons.default
 }
 
+// ── Inline icons for buttons / UI ─────────────────────────────────────────
+const Icon = ({ name, size = 16 }) => {
+  const s = { width: size, height: size, flexShrink: 0, verticalAlign: 'middle' }
+  const i = {
+    search:  <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>,
+    usb:     <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="10" cy="7" r="1" fill="currentColor"/><path d="M4 20l3.5-3.5"/><path d="M15 15l-2-2 4-4-2-2 1.5-1.5L21 8l-6 7z"/><path d="M10 8v6"/><circle cx="10" cy="16" r="2"/></svg>,
+    refresh: <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>,
+    bolt:    <svg viewBox="0 0 24 24" style={s} fill="currentColor"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>,
+    check:   <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5L20 7"/></svg>,
+    x:       <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>,
+    warn:    <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 21h20L12 2z"/><path d="M12 9v5M12 17h.01"/></svg>,
+    grid:    <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
+    win:     <svg viewBox="0 0 24 24" style={s} fill="currentColor"><path d="M3 5.6L10.5 4.5V11.5H3V5.6ZM11.5 4.35L21 3V11.5H11.5V4.35ZM3 12.5H10.5V19.5L3 18.4V12.5ZM11.5 12.5H21V21L11.5 19.65V12.5Z"/></svg>,
+    linux:   <svg viewBox="0 0 24 24" style={s} fill="currentColor"><path d="M12 2c-2 0-3 2-3 4 0 1 .5 2 1 2.5L8 12l-2 4 1 3 2-1 3 1 3-1 2 1 1-3-2-4-2-3.5c.5-.5 1-1.5 1-2.5 0-2-1-4-3-4zm-1 4a1 1 0 011 1 1 1 0 01-1 1 1 1 0 01-1-1 1 1 0 011-1zm2 0a1 1 0 011 1 1 1 0 01-1 1 1 1 0 01-1-1 1 1 0 011-1z"/></svg>,
+    folder:  <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>,
+    flash:   <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h4l2-9 4 18 2-9h6"/></svg>,
+  }
+  return i[name] || null
+}
+
 // ── Badge ─────────────────────────────────────────────────────────────────
 const Badge = ({ type }) => {
   const c = badgeColors[type] || badgeColors.stable
   return (
-    <span style={{
-      display: 'inline-block', fontSize: 10, fontWeight: 500,
-      padding: '2px 8px', borderRadius: 20, letterSpacing: '0.04em',
-      background: c.bg, color: c.text, textTransform: 'uppercase',
-    }}>{type}</span>
+    <span className="badge" style={{ background: c.bg, color: c.text }}>{type}</span>
   )
 }
 
 // ── OS Card ───────────────────────────────────────────────────────────────
 const OsCard = ({ os, selected, onClick }) => (
-  <div
+  <button
+    type="button"
     className={`os-card ${selected ? 'selected' : ''}`}
     onClick={() => onClick(os)}
-    style={{ '--accent': os.color }}
   >
     {selected && <div className="selected-dot" />}
-    <div className="os-card-icon">
+    <div className="os-card-icon" style={{ background: os.color + '1f' }}>
       <OsIcon type={os.icon} color={os.color} size={26} />
     </div>
     <div className="os-card-name">{os.name}</div>
     <div className="os-card-version">{os.version}</div>
     <div className="os-card-meta">{os.arch} · {os.size}</div>
     <div style={{ marginTop: 8 }}><Badge type={os.badge} /></div>
-  </div>
+  </button>
 )
 
 // ── Progress Ring ─────────────────────────────────────────────────────────
-const ProgressRing = ({ pct, size = 60, color = '#6c63ff' }) => {
-  const r = (size - 8) / 2
+const ProgressRing = ({ pct, size = 80, color = '#6c63ff' }) => {
+  const r = (size - 10) / 2
   const circ = 2 * Math.PI * r
-  const offset = circ - (pct / 100) * circ
+  const offset = circ - (Math.max(0, Math.min(100, pct)) / 100) * circ
   return (
     <svg width={size} height={size}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#2a2a35" strokeWidth="4"/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="4"
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#2a2a35" strokeWidth="5"/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth="5"
         strokeDasharray={circ} strokeDashoffset={offset}
         strokeLinecap="round" transform={`rotate(-90 ${size/2} ${size/2})`}
-        style={{ transition: 'stroke-dashoffset 0.3s' }}
+        style={{ transition: 'stroke-dashoffset 0.3s ease' }}
       />
-      <text x={size/2} y={size/2+5} textAnchor="middle" fill="#e8e8f0" fontSize="13" fontWeight="500">{pct}%</text>
+      <text x={size/2} y={size/2+5} textAnchor="middle" fill="#e8e8f2" fontSize="14" fontWeight="600">{Math.round(pct)}%</text>
     </svg>
   )
 }
 
-// ── Main App ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────
+// MAIN APP
+// ─────────────────────────────────────────────────────────────────────────
 export default function App() {
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [usbDrives, setUsbDrives] = useState([])
   const [selectedDrive, setSelectedDrive] = useState(null)
-  const [phase, setPhase] = useState('idle') // idle | downloading | flashing | done | error
+  const [firmware, setFirmware] = useState(null)
+  const [partitionSettings, setPartitionSettings] = useState(null)
+  const [phase, setPhase] = useState('idle')
   const [downloadPct, setDownloadPct] = useState(0)
   const [flashPct, setFlashPct] = useState(0)
+  const [flashStage, setFlashStage] = useState('')
+  const [flashDetail, setFlashDetail] = useState('')
   const [isoPath, setIsoPath] = useState(null)
   const [errorMsg, setErrorMsg] = useState('')
-  const [page, setPage] = useState('library') // library | flash
+  const [page, setPage] = useState('library')
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  // Track whether user has manually selected a drive, so polling won't overwrite it
+  const userSelectedDrive = useRef(false)
 
   const filtered = catalog.filter(os => {
     const matchCat = category === 'all' || os.category === category
-    const matchSearch = os.name.toLowerCase().includes(search.toLowerCase()) ||
-      os.version.toLowerCase().includes(search.toLowerCase())
-    return matchCat && matchSearch
+    const q = search.toLowerCase()
+    return matchCat && (os.name.toLowerCase().includes(q) || os.version.toLowerCase().includes(q))
   })
 
+  // ── Load USB drives (preserves user selection) ──────────────────────────
   const loadDrives = useCallback(async () => {
-    const drives = await api.getUSBDrives()
-    setUsbDrives(drives)
-    if (drives.length > 0) setSelectedDrive(drives[0])
+    try {
+      const drives = await api.getUSBDrives()
+      setUsbDrives(drives)
+      setSelectedDrive(prev => {
+        // If user picked a drive, keep it if still present
+        if (prev && drives.some(d => d.device === prev.device)) return prev
+        // Otherwise default to first available
+        return drives[0] || null
+      })
+    } catch (e) {
+      console.error('Failed to load drives:', e)
+    }
   }, [])
 
+  // ── Initial setup ────────────────────────────────────────────────────────
   useEffect(() => {
     loadDrives()
     const interval = setInterval(loadDrives, 5000)
+    ;(async () => {
+      try { setFirmware(await api.detectFirmware()) } catch (_) {}
+    })()
     return () => clearInterval(interval)
   }, [loadDrives])
 
+  // ── Recompute partition settings when OS or firmware changes ───────────
+  useEffect(() => {
+    if (!selected || !firmware) return
+    ;(async () => {
+      try {
+        const settings = await api.recommendPartitionSettings({
+          osCategory: selected.category,
+          sizeBytes: selected.sizeBytes,
+          firmware: firmware.type,
+        })
+        setPartitionSettings(settings)
+      } catch (e) {
+        console.error('Failed to get partition settings:', e)
+      }
+    })()
+  }, [selected, firmware])
+
+  // ── Reset state when selecting a new OS ─────────────────────────────────
   const handleSelectOS = (os) => {
     setSelected(os)
     setPhase('idle')
     setDownloadPct(0)
     setFlashPct(0)
+    setFlashStage('')
+    setFlashDetail('')
     setIsoPath(null)
+    setErrorMsg('')
   }
 
-  const handleDownloadAndFlash = async () => {
-    if (!selected) return
+  // ── Manual USB selection ────────────────────────────────────────────────
+  const handleSelectDrive = (drive) => {
+    userSelectedDrive.current = true
+    setSelectedDrive(drive)
+  }
 
-    // Check if URL is placeholder
+  // ── The big flash pipeline ──────────────────────────────────────────────
+  const startFlash = async () => {
+    setConfirmOpen(false)
+    if (!selected || !selectedDrive || !partitionSettings) return
+
     if (selected.downloadUrl.includes('YOUR_URL_HERE')) {
-      setErrorMsg(`Please set a real download URL for ${selected.name} in src/os-catalog.js`)
+      setErrorMsg(`No download URL set for ${selected.name}. Edit src/os-catalog.js to add one.`)
       setPhase('error')
       return
     }
 
     try {
+      // ── Stage 1: Download ────────────────────────────────────────────
       setPhase('downloading')
       setDownloadPct(0)
-
       api.removeDownloadListener()
-      api.onDownloadProgress(({ pct }) => setDownloadPct(pct))
+      api.onDownloadProgress(({ pct }) => setDownloadPct(pct || 0))
 
-      const path = await api.downloadISO({ url: selected.downloadUrl, filename: selected.filename })
-      setIsoPath(path)
+      const downloadedPath = await api.downloadISO({
+        url: selected.downloadUrl,
+        filename: selected.filename,
+      })
+      setIsoPath(downloadedPath)
 
-      if (selectedDrive) {
-        setPhase('flashing')
-        setFlashPct(0)
-        api.removeFlashListener()
-        let fakePct = 0
-        const fakeInterval = setInterval(() => {
-          fakePct = Math.min(fakePct + Math.random() * 3, 98)
-          setFlashPct(Math.round(fakePct))
-        }, 400)
+      // ── Stage 2: Flash ───────────────────────────────────────────────
+      setPhase('flashing')
+      setFlashPct(0)
+      setFlashStage('starting')
+      setFlashDetail('Preparing...')
 
-        await api.flashISO({ isoPath: path, device: selectedDrive.device })
-        clearInterval(fakeInterval)
-        setFlashPct(100)
-      }
+      api.removeFlashListener()
+      api.onFlashProgress(({ stage, pct, detail }) => {
+        if (typeof pct === 'number') setFlashPct(pct)
+        if (stage) setFlashStage(stage)
+        if (detail) setFlashDetail(detail)
+      })
 
+      await api.flashISO({
+        isoPath: downloadedPath,
+        device: selectedDrive.device,
+        scheme: partitionSettings.scheme,
+        filesystem: partitionSettings.filesystem,
+        requiresWimSplit: partitionSettings.requiresWimSplit,
+      })
+
+      setFlashPct(100)
       setPhase('done')
     } catch (e) {
-      setErrorMsg(e.message || 'An error occurred')
+      console.error('Flash failed:', e)
+      setErrorMsg(e.message || 'Something went wrong during the flash.')
       setPhase('error')
+    } finally {
+      api.removeDownloadListener()
+      api.removeFlashListener()
     }
   }
 
@@ -189,20 +309,30 @@ export default function App() {
     setPhase('idle')
     setDownloadPct(0)
     setFlashPct(0)
+    setFlashStage('')
+    setFlashDetail('')
     setErrorMsg('')
   }
 
+  // ─────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────
   return (
     <div className="app-root">
       {/* Title bar */}
       <div className="titlebar">
         <div className="titlebar-drag">
           <span className="app-wordmark">⬡ FlashOS</span>
+          {firmware && (
+            <span className="firmware-pill" title={`Detected ${firmware.type.toUpperCase()} (${firmware.confidence} confidence)`}>
+              {firmware.type.toUpperCase()}
+            </span>
+          )}
         </div>
         <div className="titlebar-controls">
-          <button onClick={api.minimize} className="tb-btn tb-min" aria-label="Minimize"><span/></button>
-          <button onClick={api.maximize} className="tb-btn tb-max" aria-label="Maximize"><span/></button>
-          <button onClick={api.close} className="tb-btn tb-close" aria-label="Close"><span/></button>
+          <button onClick={api.minimize} className="tb-btn tb-min" aria-label="Minimize" />
+          <button onClick={api.maximize} className="tb-btn tb-max" aria-label="Maximize" />
+          <button onClick={api.close}    className="tb-btn tb-close" aria-label="Close" />
         </div>
       </div>
 
@@ -212,22 +342,18 @@ export default function App() {
           <nav>
             <div className="nav-section-label">Browse</div>
             {categories.map(c => (
-              <button key={c.id}
+              <button key={c.id} type="button"
                 className={`nav-item ${category === c.id && page === 'library' ? 'active' : ''}`}
                 onClick={() => { setCategory(c.id); setPage('library') }}>
-                <span className="nav-icon">
-                  {c.id === 'all' && '◈'}
-                  {c.id === 'windows' && '⊞'}
-                  {c.id === 'linux' && '🐧'}
-                </span>
+                <Icon name={c.id === 'all' ? 'grid' : c.id === 'windows' ? 'win' : 'linux'} size={15} />
                 {c.label}
               </button>
             ))}
-
             <div className="nav-section-label" style={{ marginTop: 24 }}>Tools</div>
-            <button className={`nav-item ${page === 'flash' ? 'active' : ''}`}
+            <button type="button"
+              className={`nav-item ${page === 'flash' ? 'active' : ''}`}
               onClick={() => setPage('flash')}>
-              <span className="nav-icon">⚡</span> Flash Manager
+              <Icon name="flash" size={15} /> Flash Manager
             </button>
           </nav>
 
@@ -247,22 +373,22 @@ export default function App() {
             <>
               <div className="topbar">
                 <h1 className="page-title">
-                  {category === 'all' ? 'All Systems' : category === 'windows' ? 'Windows' : 'Linux Distros'}
+                  {category === 'all' ? 'All Systems' : category === 'windows' ? 'Windows' : 'Linux'}
                   <span className="count-badge">{filtered.length}</span>
                 </h1>
                 <div className="search-wrap">
-                  <span className="search-icon">⌕</span>
-                  <input
-                    className="search-input"
-                    placeholder="Search..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
+                  <span className="search-icon"><Icon name="search" size={15} /></span>
+                  <input className="search-input" placeholder="Search..."
+                    value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
               </div>
 
               <div className="os-grid">
-                {filtered.map(os => (
+                {filtered.length === 0 ? (
+                  <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+                    <div className="empty-text">No operating systems match your search.</div>
+                  </div>
+                ) : filtered.map(os => (
                   <OsCard key={os.id} os={os} selected={selected?.id === os.id} onClick={handleSelectOS} />
                 ))}
               </div>
@@ -275,15 +401,14 @@ export default function App() {
 
               {!selected ? (
                 <div className="empty-state">
-                  <div className="empty-icon">◉</div>
-                  <div className="empty-text">Select an OS from the library first</div>
+                  <div className="empty-text">Select an operating system first.</div>
                   <button className="btn-secondary" onClick={() => setPage('library')}>Browse Library</button>
                 </div>
               ) : (
                 <div className="flash-layout">
-                  {/* Left: OS info */}
+                  {/* Left: OS + USB + Partition info */}
                   <div className="flash-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+                    <div className="flash-os-header">
                       <div className="flash-os-icon" style={{ background: selected.color + '22' }}>
                         <OsIcon type={selected.icon} color={selected.color} size={36} />
                       </div>
@@ -296,21 +421,23 @@ export default function App() {
 
                     <div className="flash-divider" />
 
-                    {/* USB selector */}
                     <div className="usb-section">
                       <div className="usb-label">
-                        <span>⊔</span> Target USB Drive
-                        <button className="refresh-btn" onClick={loadDrives}>↻ Refresh</button>
+                        <Icon name="usb" size={14} /> Target USB drive
+                        <button type="button" className="refresh-btn" onClick={loadDrives}>
+                          <Icon name="refresh" size={12} /> Refresh
+                        </button>
                       </div>
                       {usbDrives.length === 0 ? (
-                        <div className="no-usb">No USB drives detected. Plug one in and refresh.</div>
+                        <div className="no-usb">No USB drives detected. Plug one in then click Refresh.</div>
                       ) : (
                         <div className="usb-list">
                           {usbDrives.map(drive => (
-                            <label key={drive.device} className={`usb-option ${selectedDrive?.device === drive.device ? 'selected' : ''}`}>
+                            <label key={drive.device}
+                              className={`usb-option ${selectedDrive?.device === drive.device ? 'selected' : ''}`}>
                               <input type="radio" name="drive" value={drive.device}
                                 checked={selectedDrive?.device === drive.device}
-                                onChange={() => setSelectedDrive(drive)} />
+                                onChange={() => handleSelectDrive(drive)} />
                               <span className="usb-name">{drive.name}</span>
                               <span className="usb-dev">{drive.device}</span>
                               <span className="usb-size">{drive.size}</span>
@@ -319,75 +446,101 @@ export default function App() {
                         </div>
                       )}
                     </div>
+
+                    {partitionSettings && (
+                      <>
+                        <div className="flash-divider" />
+                        <div className="usb-label">Partition settings (auto)</div>
+                        <div className="partition-info">
+                          <div className="part-row"><span>Scheme</span><span className="part-val">{partitionSettings.scheme.toUpperCase()}</span></div>
+                          <div className="part-row"><span>Target</span><span className="part-val">{partitionSettings.target.toUpperCase()}</span></div>
+                          <div className="part-row"><span>Filesystem</span><span className="part-val">{partitionSettings.filesystem.toUpperCase()}</span></div>
+                          {partitionSettings.requiresWimSplit && (
+                            <div className="part-row"><span>WIM split</span><span className="part-val">Yes (auto)</span></div>
+                          )}
+                        </div>
+                        {partitionSettings.notes && partitionSettings.notes.length > 0 && (
+                          <div className="partition-notes">
+                            {partitionSettings.notes.map((n, i) => <div key={i}>• {n}</div>)}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
-                  {/* Right: Action panel */}
+                  {/* Right: Action / progress panel */}
                   <div className="flash-card action-card">
                     {phase === 'idle' && (
                       <>
-                        <div className="action-title">Ready to Flash</div>
+                        <div className="action-title">Ready to flash</div>
                         <div className="action-steps">
                           <div className="step-row done">
-                            <span className="step-dot done">✓</span>
+                            <span className="step-dot done"><Icon name="check" size={11} /></span>
                             <span>OS selected: {selected.name} {selected.version}</span>
                           </div>
                           <div className={`step-row ${selectedDrive ? 'done' : 'pending'}`}>
                             <span className={`step-dot ${selectedDrive ? 'done' : 'pending'}`}>
-                              {selectedDrive ? '✓' : '○'}
+                              {selectedDrive ? <Icon name="check" size={11} /> : '○'}
                             </span>
                             <span>{selectedDrive ? `USB: ${selectedDrive.name}` : 'Select a USB drive'}</span>
                           </div>
-                          <div className="step-row pending">
-                            <span className="step-dot pending">○</span>
-                            <span>Download &amp; Flash</span>
+                          <div className={`step-row ${partitionSettings ? 'done' : 'pending'}`}>
+                            <span className={`step-dot ${partitionSettings ? 'done' : 'pending'}`}>
+                              {partitionSettings ? <Icon name="check" size={11} /> : '○'}
+                            </span>
+                            <span>{partitionSettings ? `Settings: ${partitionSettings.scheme.toUpperCase()} + ${partitionSettings.filesystem.toUpperCase()}` : 'Detecting...'}</span>
                           </div>
                         </div>
+
                         <div className="warning-box">
-                          ⚠ All data on the selected USB drive will be erased.
+                          <Icon name="warn" size={14} />
+                          <span>All data on <strong>{selectedDrive?.name || 'the selected USB'}</strong> will be permanently erased.</span>
                         </div>
-                        <button
-                          className="btn-flash"
-                          disabled={!selectedDrive}
-                          onClick={handleDownloadAndFlash}
-                        >
-                          ⚡ Download &amp; Flash
+
+                        <button className="btn-flash" disabled={!selectedDrive || !partitionSettings}
+                          onClick={() => setConfirmOpen(true)}>
+                          <Icon name="bolt" size={14} /> Download & Flash
                         </button>
                       </>
                     )}
 
                     {phase === 'downloading' && (
                       <div className="progress-state">
-                        <ProgressRing pct={downloadPct} color={selected.color} size={80} />
-                        <div className="progress-label">Downloading ISO...</div>
+                        <ProgressRing pct={downloadPct} color={selected.color} size={90} />
+                        <div className="progress-label">Downloading ISO</div>
                         <div className="progress-sub">{selected.filename}</div>
                       </div>
                     )}
 
                     {phase === 'flashing' && (
                       <div className="progress-state">
-                        <ProgressRing pct={flashPct} color="#f97316" size={80} />
-                        <div className="progress-label">Flashing to USB...</div>
-                        <div className="progress-sub">{selectedDrive?.name}</div>
+                        <ProgressRing pct={flashPct} color="#f97316" size={90} />
+                        <div className="progress-label">{flashStage ? flashStage.charAt(0).toUpperCase() + flashStage.slice(1) : 'Flashing'}</div>
+                        <div className="progress-sub">{flashDetail || selectedDrive?.name}</div>
                         <div className="flash-warning">Do not remove the USB drive.</div>
                       </div>
                     )}
 
                     {phase === 'done' && (
                       <div className="done-state">
-                        <div className="done-icon">✓</div>
-                        <div className="done-title">Flash Complete</div>
-                        <div className="done-sub">Your USB is ready. Reboot and select the USB as boot device.</div>
-                        <button className="btn-secondary" onClick={() => isoPath && api.openFolder(isoPath)}>Open ISO Folder</button>
-                        <button className="btn-flash" onClick={handleReset} style={{ marginTop: 8 }}>Flash Another</button>
+                        <div className="done-icon"><Icon name="check" size={28} /></div>
+                        <div className="done-title">Flash complete</div>
+                        <div className="done-sub">Your USB is ready. Reboot your PC and boot from the USB to install.</div>
+                        <button className="btn-secondary" onClick={() => isoPath && api.openFolder(isoPath)}>
+                          <Icon name="folder" size={13} /> Show ISO file
+                        </button>
+                        <button className="btn-flash" onClick={handleReset} style={{ marginTop: 8 }}>
+                          Flash another
+                        </button>
                       </div>
                     )}
 
                     {phase === 'error' && (
                       <div className="error-state">
-                        <div className="error-icon">✕</div>
-                        <div className="error-title">Error</div>
+                        <div className="error-icon"><Icon name="x" size={26} /></div>
+                        <div className="error-title">Something went wrong</div>
                         <div className="error-msg">{errorMsg}</div>
-                        <button className="btn-flash" onClick={handleReset} style={{ marginTop: 16 }}>Try Again</button>
+                        <button className="btn-flash" onClick={handleReset} style={{ marginTop: 16 }}>Try again</button>
                       </div>
                     )}
                   </div>
@@ -401,8 +554,10 @@ export default function App() {
       {/* Bottom bar */}
       {selected && page === 'library' && (
         <div className="bottombar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <OsIcon type={selected.icon} color={selected.color} size={20} />
+          <div className="bb-left">
+            <div className="bb-icon" style={{ background: selected.color + '22' }}>
+              <OsIcon type={selected.icon} color={selected.color} size={18} />
+            </div>
             <div>
               <div className="bb-name">{selected.name} {selected.version}</div>
               <div className="bb-meta">{selected.arch} · {selected.size}</div>
@@ -410,13 +565,33 @@ export default function App() {
           </div>
           <div className="bb-actions">
             {usbDrives.length > 0 ? (
-              <div className="usb-pill">⊔ {usbDrives[0].name}</div>
+              <div className="usb-pill"><Icon name="usb" size={12} /> {usbDrives[0].name}</div>
             ) : (
-              <div className="usb-pill warn">No USB detected</div>
+              <div className="usb-pill warn"><Icon name="warn" size={12} /> No USB detected</div>
             )}
             <button className="btn-flash" onClick={() => setPage('flash')}>
-              ⚡ Flash This OS
+              <Icon name="bolt" size={14} /> Flash this OS
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation dialog */}
+      {confirmOpen && (
+        <div className="modal-backdrop" onClick={() => setConfirmOpen(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-icon"><Icon name="warn" size={28} /></div>
+            <div className="modal-title">Erase {selectedDrive?.name}?</div>
+            <div className="modal-body">
+              All data on this USB drive will be permanently deleted. This action cannot be undone.
+              <br /><br />
+              Device: <strong>{selectedDrive?.device}</strong><br />
+              Size: <strong>{selectedDrive?.size}</strong>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setConfirmOpen(false)}>Cancel</button>
+              <button className="btn-flash btn-danger" onClick={startFlash}>Yes, erase and flash</button>
+            </div>
           </div>
         </div>
       )}
