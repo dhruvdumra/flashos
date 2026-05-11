@@ -1,5 +1,6 @@
 {
   "name": "flashos",
+  "author": "Dhruv Dumra",
   "version": "1.0.0",
   "description": "One-click OS downloader and USB flasher",
   "main": "electron/main.js",
