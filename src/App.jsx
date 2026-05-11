@@ -2,12 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { catalog, categories, badgeColors } from './os-catalog'
 import './app.css'
 
-// Fallback API for browser dev mode (when not running in Electron)
 const api = window.flashos || {
   minimize: () => {}, maximize: () => {}, close: () => {},
   detectFirmware: async () => ({ type: 'uefi', confidence: 'high' }),
   recommendPartitionSettings: async () => ({
-    scheme: 'gpt', target: 'uefi', filesystem: 'fat32',
+    scheme: 'mbr', target: 'uefi', filesystem: 'fat32',
     requiresWimSplit: false, notes: ['Running in demo mode'],
   }),
   checkTools: async () => ({}),
@@ -22,78 +21,26 @@ const api = window.flashos || {
   openFolder: () => {},
 }
 
-// ── Icons ──────────────────────────────────────────────────────────────────
+// ── OS Icons ──────────────────────────────────────────────────────────────
 const OsIcon = ({ type, color, size = 28 }) => {
   const s = { width: size, height: size, flexShrink: 0 }
   const icons = {
-    windows: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <path d="M3 5.6L10.5 4.5V11.5H3V5.6ZM11.5 4.35L21 3V11.5H11.5V4.35ZM3 12.5H10.5V19.5L3 18.4V12.5ZM11.5 12.5H21V21L11.5 19.65V12.5Z"/>
-      </svg>
-    ),
-    ubuntu: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <circle cx="12" cy="12" r="10" fill="none" stroke={color} strokeWidth="2"/>
-        <circle cx="12" cy="4" r="2"/>
-        <circle cx="19.2" cy="16" r="2"/>
-        <circle cx="4.8" cy="16" r="2"/>
-      </svg>
-    ),
-    debian: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5c-2.49 0-4.5-2.01-4.5-4.5S8.51 7.5 11 7.5c1.5 0 2.83.74 3.65 1.87-.37-.08-.75-.12-1.15-.12-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5c.97 0 1.87-.31 2.6-.83A4.48 4.48 0 0111 16.5z"/>
-      </svg>
-    ),
-    arch: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <path d="M12 2L2 20h4l6-15.5L18 20h4L12 2z"/>
-      </svg>
-    ),
-    fedora: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <circle cx="12" cy="12" r="10" fill="none" stroke={color} strokeWidth="2"/>
-        <path d="M12 8v8M8 12h8" stroke={color} strokeWidth="2" strokeLinecap="round"/>
-      </svg>
-    ),
-    mint: (
-      <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2">
-        <path d="M4 12C4 7.58 7.58 4 12 4c2.5 0 4.7 1.15 6.15 2.95-1 .7-2.45.5-3.45-.45-.65 1.65-.4 3.7 1 5.05.4.4.4 1.05 0 1.45-1.4 1.35-1.65 3.4-1 5.05-1-.95-2.45-1.15-3.45-.45C9.7 18.85 7.5 20 5 20"/>
-      </svg>
-    ),
-    pop: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <path d="M2 12L12 2l10 10-10 10L2 12zm10-7L5 12l7 7 7-7-7-7z"/>
-      </svg>
-    ),
-    kali: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/>
-      </svg>
-    ),
-    manjaro: (
-      <svg viewBox="0 0 24 24" style={s} fill={color}>
-        <rect x="3" y="3" width="6" height="18"/>
-        <rect x="10" y="10" width="5" height="11"/>
-        <rect x="16" y="3" width="5" height="18"/>
-      </svg>
-    ),
-    elementary: (
-      <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2">
-        <circle cx="12" cy="12" r="9"/>
-        <circle cx="12" cy="12" r="3" fill={color}/>
-      </svg>
-    ),
-    default: (
-      <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2">
-        <rect x="2" y="3" width="20" height="14" rx="2"/>
-        <path d="M8 21h8M12 17v4" strokeLinecap="round"/>
-      </svg>
-    ),
+    windows: <svg viewBox="0 0 24 24" style={s} fill={color}><path d="M3 5.6L10.5 4.5V11.5H3V5.6ZM11.5 4.35L21 3V11.5H11.5V4.35ZM3 12.5H10.5V19.5L3 18.4V12.5ZM11.5 12.5H21V21L11.5 19.65V12.5Z"/></svg>,
+    ubuntu: <svg viewBox="0 0 24 24" style={s} fill={color}><circle cx="12" cy="12" r="10" fill="none" stroke={color} strokeWidth="2"/><circle cx="12" cy="4" r="2"/><circle cx="19.2" cy="16" r="2"/><circle cx="4.8" cy="16" r="2"/></svg>,
+    debian: <svg viewBox="0 0 24 24" style={s} fill={color}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5c-2.49 0-4.5-2.01-4.5-4.5S8.51 7.5 11 7.5c1.5 0 2.83.74 3.65 1.87-.37-.08-.75-.12-1.15-.12-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5c.97 0 1.87-.31 2.6-.83A4.48 4.48 0 0111 16.5z"/></svg>,
+    arch: <svg viewBox="0 0 24 24" style={s} fill={color}><path d="M12 2L2 20h4l6-15.5L18 20h4L12 2z"/></svg>,
+    fedora: <svg viewBox="0 0 24 24" style={s} fill={color}><circle cx="12" cy="12" r="10" fill="none" stroke={color} strokeWidth="2"/><path d="M12 8v8M8 12h8" stroke={color} strokeWidth="2" strokeLinecap="round"/></svg>,
+    mint: <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2"><path d="M4 12C4 7.58 7.58 4 12 4c2.5 0 4.7 1.15 6.15 2.95-1 .7-2.45.5-3.45-.45-.65 1.65-.4 3.7 1 5.05.4.4.4 1.05 0 1.45-1.4 1.35-1.65 3.4-1 5.05-1-.95-2.45-1.15-3.45-.45C9.7 18.85 7.5 20 5 20"/></svg>,
+    pop: <svg viewBox="0 0 24 24" style={s} fill={color}><path d="M2 12L12 2l10 10-10 10L2 12zm10-7L5 12l7 7 7-7-7-7z"/></svg>,
+    kali: <svg viewBox="0 0 24 24" style={s} fill={color}><path d="M12 2L4 6v6c0 5 3.5 9 8 10 4.5-1 8-5 8-10V6l-8-4z"/></svg>,
+    manjaro: <svg viewBox="0 0 24 24" style={s} fill={color}><rect x="3" y="3" width="6" height="18"/><rect x="10" y="10" width="5" height="11"/><rect x="16" y="3" width="5" height="18"/></svg>,
+    elementary: <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill={color}/></svg>,
+    default: <svg viewBox="0 0 24 24" style={s} fill="none" stroke={color} strokeWidth="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4" strokeLinecap="round"/></svg>,
   }
   return icons[type] || icons.default
 }
 
-// ── Inline icons for buttons / UI ─────────────────────────────────────────
+// ── UI Icons ─────────────────────────────────────────────────────────────
 const Icon = ({ name, size = 16 }) => {
   const s = { width: size, height: size, flexShrink: 0, verticalAlign: 'middle' }
   const i = {
@@ -106,9 +53,11 @@ const Icon = ({ name, size = 16 }) => {
     warn:    <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 21h20L12 2z"/><path d="M12 9v5M12 17h.01"/></svg>,
     grid:    <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
     win:     <svg viewBox="0 0 24 24" style={s} fill="currentColor"><path d="M3 5.6L10.5 4.5V11.5H3V5.6ZM11.5 4.35L21 3V11.5H11.5V4.35ZM3 12.5H10.5V19.5L3 18.4V12.5ZM11.5 12.5H21V21L11.5 19.65V12.5Z"/></svg>,
-    linux:   <svg viewBox="0 0 24 24" style={s} fill="currentColor"><path d="M12 2c-2 0-3 2-3 4 0 1 .5 2 1 2.5L8 12l-2 4 1 3 2-1 3 1 3-1 2 1 1-3-2-4-2-3.5c.5-.5 1-1.5 1-2.5 0-2-1-4-3-4zm-1 4a1 1 0 011 1 1 1 0 01-1 1 1 1 0 01-1-1 1 1 0 011-1zm2 0a1 1 0 011 1 1 1 0 01-1 1 1 1 0 01-1-1 1 1 0 011-1z"/></svg>,
+    linux:   <svg viewBox="0 0 24 24" style={s} fill="currentColor"><path d="M12 2c-2 0-3 2-3 4 0 1 .5 2 1 2.5L8 12l-2 4 1 3 2-1 3 1 3-1 2 1 1-3-2-4-2-3.5c.5-.5 1-1.5 1-2.5 0-2-1-4-3-4z"/></svg>,
     folder:  <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg>,
     flash:   <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12h4l2-9 4 18 2-9h6"/></svg>,
+    chevron: <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>,
+    back:    <svg viewBox="0 0 24 24" style={s} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>,
   }
   return i[name] || null
 }
@@ -116,28 +65,30 @@ const Icon = ({ name, size = 16 }) => {
 // ── Badge ─────────────────────────────────────────────────────────────────
 const Badge = ({ type }) => {
   const c = badgeColors[type] || badgeColors.stable
-  return (
-    <span className="badge" style={{ background: c.bg, color: c.text }}>{type}</span>
-  )
+  return <span className="badge" style={{ background: c.bg, color: c.text }}>{type}</span>
 }
 
-// ── OS Card ───────────────────────────────────────────────────────────────
-const OsCard = ({ os, selected, onClick }) => (
-  <button
-    type="button"
-    className={`os-card ${selected ? 'selected' : ''}`}
-    onClick={() => onClick(os)}
-  >
-    {selected && <div className="selected-dot" />}
-    <div className="os-card-icon" style={{ background: os.color + '1f' }}>
-      <OsIcon type={os.icon} color={os.color} size={26} />
-    </div>
-    <div className="os-card-name">{os.name}</div>
-    <div className="os-card-version">{os.version}</div>
-    <div className="os-card-meta">{os.arch} · {os.size}</div>
-    <div style={{ marginTop: 8 }}><Badge type={os.badge} /></div>
-  </button>
-)
+// ── OS Card (in grid) ─────────────────────────────────────────────────────
+const OsCard = ({ os, onClick }) => {
+  // Calculate total versions across all editions
+  const totalVersions = os.editions.reduce((sum, e) => sum + e.versions.length, 0)
+  const totalEditions = os.editions.length
+
+  return (
+    <button type="button" className="os-card" onClick={() => onClick(os)}>
+      <div className="os-card-icon" style={{ background: os.color + '1f' }}>
+        <OsIcon type={os.icon} color={os.color} size={28} />
+      </div>
+      <div className="os-card-name">{os.name}</div>
+      <div className="os-card-desc">{os.description}</div>
+      <div className="os-card-stats">
+        <span>{totalEditions} {totalEditions === 1 ? 'edition' : 'editions'}</span>
+        <span className="dot">·</span>
+        <span>{totalVersions} {totalVersions === 1 ? 'version' : 'versions'}</span>
+      </div>
+    </button>
+  )
+}
 
 // ── Progress Ring ─────────────────────────────────────────────────────────
 const ProgressRing = ({ pct, size = 80, color = '#6c63ff' }) => {
@@ -163,7 +114,13 @@ const ProgressRing = ({ pct, size = 80, color = '#6c63ff' }) => {
 export default function App() {
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
+
+  // Drawer state (when user clicks an OS card)
+  const [drawerOs, setDrawerOs] = useState(null)
+
+  // The actually-selected, ready-to-flash item (OS + edition + version flattened)
   const [selected, setSelected] = useState(null)
+
   const [usbDrives, setUsbDrives] = useState([])
   const [selectedDrive, setSelectedDrive] = useState(null)
   const [firmware, setFirmware] = useState(null)
@@ -178,24 +135,26 @@ export default function App() {
   const [page, setPage] = useState('library')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  // Track whether user has manually selected a drive, so polling won't overwrite it
   const userSelectedDrive = useRef(false)
 
-  const filtered = catalog.filter(os => {
+  // Filtered OS list (operates on OS-level, not versions)
+  const filteredOS = catalog.filter(os => {
     const matchCat = category === 'all' || os.category === category
     const q = search.toLowerCase()
-    return matchCat && (os.name.toLowerCase().includes(q) || os.version.toLowerCase().includes(q))
+    if (!q) return matchCat
+    // Search in OS name, edition names, and version labels
+    const hay = (os.name + ' ' + os.description + ' ' +
+                 os.editions.map(e => e.name + ' ' + e.versions.map(v => v.label).join(' ')).join(' ')).toLowerCase()
+    return matchCat && hay.includes(q)
   })
 
-  // ── Load USB drives (preserves user selection) ──────────────────────────
+  // ── USB drives ─────────────────────────────────────────────────────────
   const loadDrives = useCallback(async () => {
     try {
       const drives = await api.getUSBDrives()
       setUsbDrives(drives)
       setSelectedDrive(prev => {
-        // If user picked a drive, keep it if still present
         if (prev && drives.some(d => d.device === prev.device)) return prev
-        // Otherwise default to first available
         return drives[0] || null
       })
     } catch (e) {
@@ -203,7 +162,6 @@ export default function App() {
     }
   }, [])
 
-  // ── Initial setup ────────────────────────────────────────────────────────
   useEffect(() => {
     loadDrives()
     const interval = setInterval(loadDrives, 5000)
@@ -213,7 +171,7 @@ export default function App() {
     return () => clearInterval(interval)
   }, [loadDrives])
 
-  // ── Recompute partition settings when OS or firmware changes ───────────
+  // ── Partition settings ────────────────────────────────────────────────
   useEffect(() => {
     if (!selected || !firmware) return
     ;(async () => {
@@ -224,60 +182,56 @@ export default function App() {
           firmware: firmware.type,
         })
         setPartitionSettings(settings)
-      } catch (e) {
-        console.error('Failed to get partition settings:', e)
-      }
+      } catch (e) { console.error('Partition settings failed:', e) }
     })()
   }, [selected, firmware])
 
-  // ── Reset state when selecting a new OS ─────────────────────────────────
-  const handleSelectOS = (os) => {
-    setSelected(os)
-    setPhase('idle')
-    setDownloadPct(0)
-    setFlashPct(0)
-    setFlashStage('')
-    setFlashDetail('')
-    setIsoPath(null)
-    setErrorMsg('')
+  // ── Pick a specific version (closes drawer, sets selected) ────────────
+  const handlePickVersion = (os, edition, version) => {
+    const flat = {
+      osId: os.id, osName: os.name,
+      category: os.category, color: os.color, icon: os.icon,
+      description: os.description,
+      editionId: edition.id, editionName: edition.name, badge: edition.badge,
+      ...version,
+      // displayName: combine name, edition, version for cards/UI
+      displayName: `${os.name} ${edition.name}`,
+      versionLabel: version.label,
+    }
+    setSelected(flat)
+    setDrawerOs(null)
+    setPhase('idle'); setDownloadPct(0); setFlashPct(0)
+    setFlashStage(''); setFlashDetail(''); setIsoPath(null); setErrorMsg('')
   }
 
-  // ── Manual USB selection ────────────────────────────────────────────────
   const handleSelectDrive = (drive) => {
     userSelectedDrive.current = true
     setSelectedDrive(drive)
   }
 
-  // ── The big flash pipeline ──────────────────────────────────────────────
+  // ── Flash pipeline ─────────────────────────────────────────────────────
   const startFlash = async () => {
     setConfirmOpen(false)
     if (!selected || !selectedDrive || !partitionSettings) return
 
     if (selected.downloadUrl.includes('YOUR_URL_HERE')) {
-      setErrorMsg(`No download URL set for ${selected.name}. Edit src/os-catalog.js to add one.`)
+      setErrorMsg(`No download URL set for this version. Edit src/os-catalog.js to add one.`)
       setPhase('error')
       return
     }
 
     try {
-      // ── Stage 1: Download ────────────────────────────────────────────
-      setPhase('downloading')
-      setDownloadPct(0)
+      setPhase('downloading'); setDownloadPct(0)
       api.removeDownloadListener()
       api.onDownloadProgress(({ pct }) => setDownloadPct(pct || 0))
 
       const downloadedPath = await api.downloadISO({
-        url: selected.downloadUrl,
-        filename: selected.filename,
+        url: selected.downloadUrl, filename: selected.filename,
       })
       setIsoPath(downloadedPath)
 
-      // ── Stage 2: Flash ───────────────────────────────────────────────
-      setPhase('flashing')
-      setFlashPct(0)
-      setFlashStage('starting')
-      setFlashDetail('Preparing...')
-
+      setPhase('flashing'); setFlashPct(0)
+      setFlashStage('starting'); setFlashDetail('Preparing...')
       api.removeFlashListener()
       api.onFlashProgress(({ stage, pct, detail }) => {
         if (typeof pct === 'number') setFlashPct(pct)
@@ -293,8 +247,7 @@ export default function App() {
         requiresWimSplit: partitionSettings.requiresWimSplit,
       })
 
-      setFlashPct(100)
-      setPhase('done')
+      setFlashPct(100); setPhase('done')
     } catch (e) {
       console.error('Flash failed:', e)
       setErrorMsg(e.message || 'Something went wrong during the flash.')
@@ -306,16 +259,10 @@ export default function App() {
   }
 
   const handleReset = () => {
-    setPhase('idle')
-    setDownloadPct(0)
-    setFlashPct(0)
-    setFlashStage('')
-    setFlashDetail('')
-    setErrorMsg('')
+    setPhase('idle'); setDownloadPct(0); setFlashPct(0)
+    setFlashStage(''); setFlashDetail(''); setErrorMsg('')
   }
 
-  // ─────────────────────────────────────────────────────────────────────
-  // RENDER
   // ─────────────────────────────────────────────────────────────────────
   return (
     <div className="app-root">
@@ -360,8 +307,8 @@ export default function App() {
           {selected && (
             <div className="sidebar-selected">
               <div className="sidebar-selected-label">Selected</div>
-              <div className="sidebar-selected-name">{selected.name}</div>
-              <div className="sidebar-selected-ver">{selected.version}</div>
+              <div className="sidebar-selected-name">{selected.displayName}</div>
+              <div className="sidebar-selected-ver">{selected.versionLabel}</div>
               <div style={{ marginTop: 8 }}><Badge type={selected.badge} /></div>
             </div>
           )}
@@ -373,23 +320,23 @@ export default function App() {
             <>
               <div className="topbar">
                 <h1 className="page-title">
-                  {category === 'all' ? 'All Systems' : category === 'windows' ? 'Windows' : 'Linux'}
-                  <span className="count-badge">{filtered.length}</span>
+                  {category === 'all' ? 'Operating Systems' : category === 'windows' ? 'Windows' : 'Linux Distributions'}
+                  <span className="count-badge">{filteredOS.length}</span>
                 </h1>
                 <div className="search-wrap">
                   <span className="search-icon"><Icon name="search" size={15} /></span>
-                  <input className="search-input" placeholder="Search..."
+                  <input className="search-input" placeholder="Search any version..."
                     value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
               </div>
 
               <div className="os-grid">
-                {filtered.length === 0 ? (
+                {filteredOS.length === 0 ? (
                   <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
                     <div className="empty-text">No operating systems match your search.</div>
                   </div>
-                ) : filtered.map(os => (
-                  <OsCard key={os.id} os={os} selected={selected?.id === os.id} onClick={handleSelectOS} />
+                ) : filteredOS.map(os => (
+                  <OsCard key={os.id} os={os} onClick={setDrawerOs} />
                 ))}
               </div>
             </>
@@ -406,15 +353,14 @@ export default function App() {
                 </div>
               ) : (
                 <div className="flash-layout">
-                  {/* Left: OS + USB + Partition info */}
                   <div className="flash-card">
                     <div className="flash-os-header">
                       <div className="flash-os-icon" style={{ background: selected.color + '22' }}>
                         <OsIcon type={selected.icon} color={selected.color} size={36} />
                       </div>
                       <div>
-                        <div className="flash-os-name">{selected.name}</div>
-                        <div className="flash-os-ver">{selected.version} · {selected.arch} · {selected.size}</div>
+                        <div className="flash-os-name">{selected.displayName}</div>
+                        <div className="flash-os-ver">{selected.versionLabel} · {selected.arch} · {selected.size}</div>
                       </div>
                     </div>
                     <div className="flash-desc">{selected.description}</div>
@@ -468,7 +414,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* Right: Action / progress panel */}
                   <div className="flash-card action-card">
                     {phase === 'idle' && (
                       <>
@@ -476,7 +421,7 @@ export default function App() {
                         <div className="action-steps">
                           <div className="step-row done">
                             <span className="step-dot done"><Icon name="check" size={11} /></span>
-                            <span>OS selected: {selected.name} {selected.version}</span>
+                            <span>{selected.displayName} {selected.versionLabel}</span>
                           </div>
                           <div className={`step-row ${selectedDrive ? 'done' : 'pending'}`}>
                             <span className={`step-dot ${selectedDrive ? 'done' : 'pending'}`}>
@@ -488,15 +433,13 @@ export default function App() {
                             <span className={`step-dot ${partitionSettings ? 'done' : 'pending'}`}>
                               {partitionSettings ? <Icon name="check" size={11} /> : '○'}
                             </span>
-                            <span>{partitionSettings ? `Settings: ${partitionSettings.scheme.toUpperCase()} + ${partitionSettings.filesystem.toUpperCase()}` : 'Detecting...'}</span>
+                            <span>{partitionSettings ? `${partitionSettings.scheme.toUpperCase()} + ${partitionSettings.filesystem.toUpperCase()}` : 'Detecting...'}</span>
                           </div>
                         </div>
-
                         <div className="warning-box">
                           <Icon name="warn" size={14} />
                           <span>All data on <strong>{selectedDrive?.name || 'the selected USB'}</strong> will be permanently erased.</span>
                         </div>
-
                         <button className="btn-flash" disabled={!selectedDrive || !partitionSettings}
                           onClick={() => setConfirmOpen(true)}>
                           <Icon name="bolt" size={14} /> Download & Flash
@@ -529,9 +472,7 @@ export default function App() {
                         <button className="btn-secondary" onClick={() => isoPath && api.openFolder(isoPath)}>
                           <Icon name="folder" size={13} /> Show ISO file
                         </button>
-                        <button className="btn-flash" onClick={handleReset} style={{ marginTop: 8 }}>
-                          Flash another
-                        </button>
+                        <button className="btn-flash" onClick={handleReset} style={{ marginTop: 8 }}>Flash another</button>
                       </div>
                     )}
 
@@ -559,7 +500,7 @@ export default function App() {
               <OsIcon type={selected.icon} color={selected.color} size={18} />
             </div>
             <div>
-              <div className="bb-name">{selected.name} {selected.version}</div>
+              <div className="bb-name">{selected.displayName} {selected.versionLabel}</div>
               <div className="bb-meta">{selected.arch} · {selected.size}</div>
             </div>
           </div>
@@ -572,6 +513,49 @@ export default function App() {
             <button className="btn-flash" onClick={() => setPage('flash')}>
               <Icon name="bolt" size={14} /> Flash this OS
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* DRAWER — edition + version picker */}
+      {drawerOs && (
+        <div className="drawer-backdrop" onClick={() => setDrawerOs(null)}>
+          <div className="drawer" onClick={e => e.stopPropagation()}>
+            <div className="drawer-header">
+              <button className="drawer-back" onClick={() => setDrawerOs(null)}>
+                <Icon name="back" size={18} />
+              </button>
+              <div className="drawer-os-icon" style={{ background: drawerOs.color + '22' }}>
+                <OsIcon type={drawerOs.icon} color={drawerOs.color} size={32} />
+              </div>
+              <div>
+                <div className="drawer-title">{drawerOs.name}</div>
+                <div className="drawer-subtitle">{drawerOs.description}</div>
+              </div>
+            </div>
+
+            <div className="drawer-body">
+              {drawerOs.editions.map(edition => (
+                <div key={edition.id} className="edition-group">
+                  <div className="edition-header">
+                    <div className="edition-name">{edition.name}</div>
+                    <Badge type={edition.badge} />
+                  </div>
+                  <div className="version-grid">
+                    {edition.versions.map(version => (
+                      <button key={version.id} type="button" className="version-card"
+                        onClick={() => handlePickVersion(drawerOs, edition, version)}>
+                        <div className="version-label">{version.label}</div>
+                        <div className="version-meta">{version.arch} · {version.size}</div>
+                        {version.downloadUrl.includes('YOUR_URL_HERE') && (
+                          <div className="version-warn">URL not set</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
