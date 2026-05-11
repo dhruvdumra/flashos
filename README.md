@@ -47,7 +47,10 @@ Go to the [**Releases**](../../releases/latest) page and download the installer 
 
 ## Screenshots
 
-> *(Add screenshots here after first run — drag images into the GitHub editor)*
+> <img width="1366" height="729" alt="1" src="https://github.com/user-attachments/assets/a4d7922b-acd4-46d7-aa0d-4befff9c4d88" />
+<img width="1365" height="728" alt="2" src="https://github.com/user-attachments/assets/76c1cc20-91ca-433b-b7f0-3425aa516f65" />
+
+
 
 ---
 
