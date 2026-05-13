@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "updated": "2026-05-13",
+  "_note": "Edit this file to add/update OS versions. Push to GitHub and all FlashOS users get the update automatically on next launch.",
+
+  "categories": [
+    { "id": "all",     "label": "All" },
+    { "id": "windows", "label": "Windows" },
+    { "id": "linux",   "label": "Linux" }
+  ],
+
+  "badgeColors": {
+    "latest":   { "bg": "#1a1530", "text": "#a78bfa" },
+    "lts":      { "bg": "#0a1e35", "text": "#60a5fa" },
+    "stable":   { "bg": "#0e2e1a", "text": "#4ade80" },
+    "rolling":  { "bg": "#1a2010", "text": "#86efac" },
+    "legacy":   { "bg": "#2a1f10", "text": "#fbbf24" },
+    "security": { "bg": "#1a1020", "text": "#f472b6" },
+    "server":   { "bg": "#101a24", "text": "#7dd3fc" }
+  },
+
+  "catalog": [
+    {
+      "id": "ubuntu",
+      "name": "Ubuntu",
+      "category": "linux",
+      "color": "#e95420",
+      "icon": "ubuntu",
+      "description": "The most popular Linux distribution. Beginner-friendly and well-supported.",
+      "editions": [
+        {
+          "id": "ubuntu-desktop",
+          "name": "Desktop",
+          "badge": "lts",
+          "versions": [
+            { "id": "u-24.04", "label": "24.04 LTS (Noble)",  "arch": "64-bit", "size": "6.0 GB", "sizeBytes": 6440000000, "filename": "ubuntu-24.04-desktop.iso", "downloadUrl": "https://releases.ubuntu.com/24.04/ubuntu-24.04.1-desktop-amd64.iso" },
+            { "id": "u-22.04", "label": "22.04 LTS (Jammy)",  "arch": "64-bit", "size": "4.7 GB", "sizeBytes": 5050000000, "filename": "ubuntu-22.04-desktop.iso", "downloadUrl": "https://releases.ubuntu.com/22.04/ubuntu-22.04.5-desktop-amd64.iso" },
+            { "id": "u-20.04", "label": "20.04 LTS (Focal)",  "arch": "64-bit", "size": "3.4 GB", "sizeBytes": 3650000000, "filename": "ubuntu-20.04-desktop.iso", "downloadUrl": "https://releases.ubuntu.com/20.04/ubuntu-20.04.6-desktop-amd64.iso" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "debian",
+      "name": "Debian",
+      "category": "linux",
+      "color": "#a80030",
+      "icon": "debian",
+      "description": "The universal OS. Free, stable, and the foundation many other distros are built on.",
+      "editions": [
+        {
+          "id": "debian-netinst",
+          "name": "Netinstall",
+          "badge": "stable",
+          "versions": [
+            { "id": "dn-12", "label": "12 Bookworm", "arch": "64-bit", "size": "630 MB", "sizeBytes": 660000000, "filename": "debian-12-netinst.iso", "downloadUrl": "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/debian-12.7.0-amd64-netinst.iso" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fedora",
+      "name": "Fedora",
+      "category": "linux",
+      "color": "#294172",
+      "icon": "fedora",
+      "description": "Cutting-edge Linux backed by Red Hat. New releases every six months.",
+      "editions": [
+        {
+          "id": "fedora-workstation",
+          "name": "Workstation",
+          "badge": "latest",
+          "versions": [
+            { "id": "f-41", "label": "41", "arch": "64-bit", "size": "2.3 GB", "sizeBytes": 2470000000, "filename": "fedora-41-workstation.iso", "downloadUrl": "https://download.fedoraproject.org/pub/fedora/linux/releases/41/Workstation/x86_64/iso/Fedora-Workstation-Live-x86_64-41-1.4.iso" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "arch",
+      "name": "Arch Linux",
+      "category": "linux",
+      "color": "#1793d1",
+      "icon": "arch",
+      "description": "Rolling release with a minimal base. Build it your way.",
+      "editions": [
+        {
+          "id": "arch-iso",
+          "name": "Installer",
+          "badge": "rolling",
+          "versions": [
+            { "id": "arch-latest", "label": "Latest", "arch": "64-bit", "size": "1.1 GB", "sizeBytes": 1180000000, "filename": "archlinux-latest.iso", "downloadUrl": "https://geo.mirror.pkgbuild.com/iso/latest/archlinux-x86_64.iso" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mint",
+      "name": "Linux Mint",
+      "category": "linux",
+      "color": "#87cf3e",
+      "icon": "mint",
+      "description": "Elegant and familiar. The most popular pick for people switching from Windows.",
+      "editions": [
+        {
+          "id": "mint-cinnamon",
+          "name": "Cinnamon",
+          "badge": "lts",
+          "versions": [
+            { "id": "m-22-cinnamon", "label": "22 Wilma", "arch": "64-bit", "size": "2.9 GB", "sizeBytes": 3110000000, "filename": "mint-22-cinnamon.iso", "downloadUrl": "https://mirrors.edge.kernel.org/linuxmint/stable/22/linuxmint-22-cinnamon-64bit.iso" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "windows",
+      "name": "Windows",
+      "category": "windows",
+      "color": "#0078d4",
+      "icon": "windows",
+      "description": "Microsoft's desktop operating system. Used by billions of people worldwide.",
+      "editions": [
+        {
+          "id": "win11-eval",
+          "name": "11 Enterprise Evaluation",
+          "badge": "latest",
+          "versions": [
+            { "id": "w11-ent-eval", "label": "Latest (90-day eval)", "arch": "64-bit", "size": "5.8 GB", "sizeBytes": 6230000000, "filename": "win11-enterprise-eval.iso", "downloadUrl": "https://go.microsoft.com/fwlink/p/?LinkID=2195280" }
+          ]
+        },
+        {
+          "id": "win10-eval",
+          "name": "10 Enterprise Evaluation",
+          "badge": "lts",
+          "versions": [
+            { "id": "w10-ent-eval", "label": "22H2 (90-day eval)", "arch": "64-bit", "size": "5.4 GB", "sizeBytes": 5800000000, "filename": "win10-enterprise-eval.iso", "downloadUrl": "https://go.microsoft.com/fwlink/p/?LinkID=2195174" }
+          ]
+        },
+        {
+          "id": "win7-archive",
+          "name": "7 Ultimate (archive)",
+          "badge": "legacy",
+          "versions": [
+            { "id": "w7-ult-sp1", "label": "SP1 64-bit", "arch": "64-bit", "size": "3.2 GB", "sizeBytes": 3440000000, "filename": "win7-ultimate-sp1.iso", "downloadUrl": "https://archive.org/download/win-7-ultimate-with-sp-1-english-x-64-bit/en_windows_7_ultimate_with_sp1_x64_dvd_u_677332.iso" }
+          ]
+        }
+      ]
+    }
+  ]
+}

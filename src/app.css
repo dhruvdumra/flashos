@@ -59,6 +59,18 @@ input  { font-family: inherit; user-select: text; }
   color: var(--accent2); background: rgba(108,99,255,0.12);
   padding: 2px 8px; border-radius: 20px; font-family: var(--mono);
 }
+.catalog-pill {
+  font-size: 10px; font-weight: 500;
+  color: var(--text3); background: var(--surface);
+  padding: 2px 8px; border-radius: 20px; font-family: var(--mono);
+  border: 0.5px solid var(--border);
+  -webkit-app-region: no-drag;
+  transition: all 0.13s;
+}
+.catalog-pill:hover {
+  color: var(--accent2);
+  border-color: var(--accent);
+}
 .titlebar-controls {
   display: flex; gap: 8px; -webkit-app-region: no-drag;
 }

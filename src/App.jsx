@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { catalog, categories, badgeColors } from './os-catalog'
+import { loadCatalog } from './os-catalog'
 import './app.css'
 
 const api = window.flashos || {
@@ -62,11 +62,7 @@ const Icon = ({ name, size = 16 }) => {
   return i[name] || null
 }
 
-// ── Badge ─────────────────────────────────────────────────────────────────
-const Badge = ({ type }) => {
-  const c = badgeColors[type] || badgeColors.stable
-  return <span className="badge" style={{ background: c.bg, color: c.text }}>{type}</span>
-}
+// ── Badge defined inside App component (needs access to loaded badgeColors) ──
 
 // ── OS Card (in grid) ─────────────────────────────────────────────────────
 const OsCard = ({ os, onClick }) => {
@@ -112,6 +108,13 @@ const ProgressRing = ({ pct, size = 80, color = '#6c63ff' }) => {
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────
 export default function App() {
+  // Catalog state (loaded async from GitHub)
+  const [catalog, setCatalog] = useState([])
+  const [categories, setCategories] = useState([])
+  const [badgeColors, setBadgeColors] = useState({})
+  const [catalogLoading, setCatalogLoading] = useState(true)
+  const [catalogUpdated, setCatalogUpdated] = useState(null)
+
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
 
@@ -136,6 +139,32 @@ export default function App() {
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const userSelectedDrive = useRef(false)
+
+  // ── Load catalog on mount ──────────────────────────────────────────────
+  const refreshCatalog = useCallback(async () => {
+    setCatalogLoading(true)
+    try {
+      const data = await loadCatalog()
+      setCatalog(data.catalog || [])
+      setCategories(data.categories || [])
+      setBadgeColors(data.badgeColors || {})
+      setCatalogUpdated(data.updated || null)
+    } catch (e) {
+      console.error('Catalog load failed:', e)
+    } finally {
+      setCatalogLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshCatalog()
+  }, [refreshCatalog])
+
+  // Make Badge component use loaded badgeColors
+  const Badge = ({ type }) => {
+    const c = badgeColors[type] || { bg: '#0e2e1a', text: '#4ade80' }
+    return <span className="badge" style={{ background: c.bg, color: c.text }}>{type}</span>
+  }
 
   // Filtered OS list (operates on OS-level, not versions)
   const filteredOS = catalog.filter(os => {
@@ -275,6 +304,12 @@ export default function App() {
               {firmware.type.toUpperCase()}
             </span>
           )}
+          {catalogUpdated && (
+            <span className="catalog-pill" title={`Catalog updated ${catalogUpdated}. Click to refresh.`}
+              onClick={refreshCatalog} style={{ cursor: 'pointer' }}>
+              Catalog: {catalogUpdated}
+            </span>
+          )}
         </div>
         <div className="titlebar-controls">
           <button onClick={api.minimize} className="tb-btn tb-min" aria-label="Minimize" />
@@ -331,7 +366,11 @@ export default function App() {
               </div>
 
               <div className="os-grid">
-                {filteredOS.length === 0 ? (
+                {catalogLoading ? (
+                  <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+                    <div className="empty-text">Loading catalog...</div>
+                  </div>
+                ) : filteredOS.length === 0 ? (
                   <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
                     <div className="empty-text">No operating systems match your search.</div>
                   </div>
