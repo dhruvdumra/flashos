@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { loadCatalog } from './os-catalog'
+import { bundledCatalog, fetchRemoteCatalog } from './os-catalog'
 import './app.css'
 
 const api = window.flashos || {
@@ -108,12 +108,11 @@ const ProgressRing = ({ pct, size = 80, color = '#6c63ff' }) => {
 // MAIN APP
 // ─────────────────────────────────────────────────────────────────────────
 export default function App() {
-  // Catalog state (loaded async from GitHub)
-  const [catalog, setCatalog] = useState([])
-  const [categories, setCategories] = useState([])
-  const [badgeColors, setBadgeColors] = useState({})
-  const [catalogLoading, setCatalogLoading] = useState(true)
-  const [catalogUpdated, setCatalogUpdated] = useState(null)
+  // Start with bundled catalog so the UI works immediately
+  const [catalog, setCatalog] = useState(bundledCatalog.catalog)
+  const [categories, setCategories] = useState(bundledCatalog.categories)
+  const [badgeColors, setBadgeColors] = useState(bundledCatalog.badgeColors)
+  const [catalogUpdated, setCatalogUpdated] = useState(bundledCatalog.updated)
 
   const [category, setCategory] = useState('all')
   const [search, setSearch] = useState('')
@@ -140,19 +139,14 @@ export default function App() {
 
   const userSelectedDrive = useRef(false)
 
-  // ── Load catalog on mount ──────────────────────────────────────────────
+  // ── Refresh catalog from GitHub (runs once on mount + manually) ────────
   const refreshCatalog = useCallback(async () => {
-    setCatalogLoading(true)
-    try {
-      const data = await loadCatalog()
-      setCatalog(data.catalog || [])
-      setCategories(data.categories || [])
-      setBadgeColors(data.badgeColors || {})
-      setCatalogUpdated(data.updated || null)
-    } catch (e) {
-      console.error('Catalog load failed:', e)
-    } finally {
-      setCatalogLoading(false)
+    const remote = await fetchRemoteCatalog()
+    if (remote) {
+      setCatalog(remote.catalog || bundledCatalog.catalog)
+      setCategories(remote.categories || bundledCatalog.categories)
+      setBadgeColors(remote.badgeColors || bundledCatalog.badgeColors)
+      setCatalogUpdated(remote.updated || 'unknown')
     }
   }, [])
 
@@ -160,7 +154,7 @@ export default function App() {
     refreshCatalog()
   }, [refreshCatalog])
 
-  // Make Badge component use loaded badgeColors
+  // Badge component using loaded badgeColors
   const Badge = ({ type }) => {
     const c = badgeColors[type] || { bg: '#0e2e1a', text: '#4ade80' }
     return <span className="badge" style={{ background: c.bg, color: c.text }}>{type}</span>
@@ -366,11 +360,7 @@ export default function App() {
               </div>
 
               <div className="os-grid">
-                {catalogLoading ? (
-                  <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
-                    <div className="empty-text">Loading catalog...</div>
-                  </div>
-                ) : filteredOS.length === 0 ? (
+                {filteredOS.length === 0 ? (
                   <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
                     <div className="empty-text">No operating systems match your search.</div>
                   </div>
