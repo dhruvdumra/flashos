@@ -137,6 +137,19 @@ export default function App() {
   const [page, setPage] = useState('library')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
+  // Manual partition settings override
+  const [manualMode, setManualMode] = useState(false)
+  const [manualSettings, setManualSettings] = useState({
+    scheme: 'mbr',
+    target: 'uefi',
+    filesystem: 'fat32',
+    clusterSize: 'default',
+    label: 'FlashOS',
+    quickFormat: true,
+    checkBadBlocks: false,
+    requiresWimSplit: false,
+  })
+
   const userSelectedDrive = useRef(false)
 
   // ── Refresh catalog from GitHub (runs once on mount + manually) ────────
@@ -154,11 +167,11 @@ export default function App() {
     refreshCatalog()
   }, [refreshCatalog])
 
-  // Badge component using loaded badgeColors
-  const Badge = ({ type }) => {
+  // Badge component memoized so React doesn't rebuild it on every render
+  const Badge = useCallback(({ type }) => {
     const c = badgeColors[type] || { bg: '#0e2e1a', text: '#4ade80' }
     return <span className="badge" style={{ background: c.bg, color: c.text }}>{type}</span>
-  }
+  }, [badgeColors])
 
   // Filtered OS list (operates on OS-level, not versions)
   const filteredOS = catalog.filter(os => {
@@ -175,7 +188,15 @@ export default function App() {
   const loadDrives = useCallback(async () => {
     try {
       const drives = await api.getUSBDrives()
-      setUsbDrives(drives)
+      setUsbDrives(prev => {
+        // Only update state if the drives list actually changed.
+        // Otherwise React re-renders the whole tree for no reason.
+        if (prev.length === drives.length &&
+            prev.every((p, i) => p.device === drives[i]?.device && p.sizeBytes === drives[i]?.sizeBytes)) {
+          return prev  // no change, skip re-render
+        }
+        return drives
+      })
       setSelectedDrive(prev => {
         if (prev && drives.some(d => d.device === prev.device)) return prev
         return drives[0] || null
@@ -187,7 +208,8 @@ export default function App() {
 
   useEffect(() => {
     loadDrives()
-    const interval = setInterval(loadDrives, 5000)
+    // Poll every 10 seconds instead of 5 — USB plugs/unplugs are rare events
+    const interval = setInterval(loadDrives, 10000)
     ;(async () => {
       try { setFirmware(await api.detectFirmware()) } catch (_) {}
     })()
@@ -205,6 +227,14 @@ export default function App() {
           firmware: firmware.type,
         })
         setPartitionSettings(settings)
+        // Also sync manual settings to the new auto-detected values
+        setManualSettings(prev => ({
+          ...prev,
+          scheme: settings.scheme,
+          target: settings.target,
+          filesystem: settings.filesystem,
+          requiresWimSplit: settings.requiresWimSplit,
+        }))
       } catch (e) { console.error('Partition settings failed:', e) }
     })()
   }, [selected, firmware])
@@ -246,7 +276,13 @@ export default function App() {
     try {
       setPhase('downloading'); setDownloadPct(0)
       api.removeDownloadListener()
-      api.onDownloadProgress(({ pct }) => setDownloadPct(pct || 0))
+      let lastDlPct = -1
+      api.onDownloadProgress(({ pct }) => {
+        if (typeof pct === 'number' && pct !== lastDlPct) {
+          setDownloadPct(pct)
+          lastDlPct = pct
+        }
+      })
 
       const downloadedPath = await api.downloadISO({
         url: selected.downloadUrl, filename: selected.filename,
@@ -256,18 +292,33 @@ export default function App() {
       setPhase('flashing'); setFlashPct(0)
       setFlashStage('starting'); setFlashDetail('Preparing...')
       api.removeFlashListener()
+      // Throttle flash progress: only update UI if percent changed or 200ms passed
+      let lastUpdate = 0
+      let lastPct = -1
       api.onFlashProgress(({ stage, pct, detail }) => {
-        if (typeof pct === 'number') setFlashPct(pct)
-        if (stage) setFlashStage(stage)
-        if (detail) setFlashDetail(detail)
+        const now = Date.now()
+        // Only update on percent change OR every 200ms (whichever first)
+        if (typeof pct === 'number' && pct !== lastPct) {
+          setFlashPct(pct)
+          lastPct = pct
+        }
+        if (now - lastUpdate > 200) {
+          if (stage) setFlashStage(stage)
+          if (detail) setFlashDetail(detail)
+          lastUpdate = now
+        }
       })
 
       await api.flashISO({
         isoPath: downloadedPath,
         device: selectedDrive.device,
-        scheme: partitionSettings.scheme,
-        filesystem: partitionSettings.filesystem,
-        requiresWimSplit: partitionSettings.requiresWimSplit,
+        scheme:           manualMode ? manualSettings.scheme           : partitionSettings.scheme,
+        filesystem:       manualMode ? manualSettings.filesystem       : partitionSettings.filesystem,
+        requiresWimSplit: manualMode ? manualSettings.requiresWimSplit : partitionSettings.requiresWimSplit,
+        label:            manualMode ? manualSettings.label            : 'FlashOS',
+        clusterSize:      manualMode ? manualSettings.clusterSize      : 'default',
+        quickFormat:      manualMode ? manualSettings.quickFormat      : true,
+        checkBadBlocks:   manualMode ? manualSettings.checkBadBlocks   : false,
       })
 
       setFlashPct(100); setPhase('done')
@@ -425,16 +476,171 @@ export default function App() {
                     {partitionSettings && (
                       <>
                         <div className="flash-divider" />
-                        <div className="usb-label">Partition settings (auto)</div>
-                        <div className="partition-info">
-                          <div className="part-row"><span>Scheme</span><span className="part-val">{partitionSettings.scheme.toUpperCase()}</span></div>
-                          <div className="part-row"><span>Target</span><span className="part-val">{partitionSettings.target.toUpperCase()}</span></div>
-                          <div className="part-row"><span>Filesystem</span><span className="part-val">{partitionSettings.filesystem.toUpperCase()}</span></div>
-                          {partitionSettings.requiresWimSplit && (
-                            <div className="part-row"><span>WIM split</span><span className="part-val">Yes (auto)</span></div>
-                          )}
+                        <div className="usb-label">
+                          Partition settings
+                          {!manualMode && <span className="auto-tag">auto</span>}
+                          <button type="button" className="refresh-btn" onClick={() => setManualMode(!manualMode)}>
+                            {manualMode ? 'Use auto' : 'Customize'}
+                          </button>
                         </div>
-                        {partitionSettings.notes && partitionSettings.notes.length > 0 && (
+
+                        {!manualMode ? (
+                          <div className="partition-info">
+                            <div className="part-row"><span>Scheme</span><span className="part-val">{partitionSettings.scheme.toUpperCase()}</span></div>
+                            <div className="part-row"><span>Target</span><span className="part-val">{partitionSettings.target.toUpperCase()}</span></div>
+                            <div className="part-row"><span>Filesystem</span><span className="part-val">{partitionSettings.filesystem.toUpperCase()}</span></div>
+                            <div className="part-row"><span>Volume label</span><span className="part-val">FlashOS</span></div>
+                            {partitionSettings.requiresWimSplit && (
+                              <div className="part-row"><span>WIM split</span><span className="part-val">Yes</span></div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="manual-settings">
+                            {/* Partition Scheme */}
+                            <div className="setting-group">
+                              <label className="setting-label">Partition scheme</label>
+                              <div className="seg-control">
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.scheme === 'mbr' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, scheme: 'mbr' })}>
+                                  MBR
+                                </button>
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.scheme === 'gpt' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, scheme: 'gpt' })}>
+                                  GPT
+                                </button>
+                              </div>
+                              <div className="setting-hint">
+                                {manualSettings.scheme === 'gpt'
+                                  ? 'Modern PCs (post-2012). Required for UEFI Secure Boot.'
+                                  : 'Universal compatibility. Works on old BIOS and modern PCs.'}
+                              </div>
+                            </div>
+
+                            {/* Target System */}
+                            <div className="setting-group">
+                              <label className="setting-label">Target system</label>
+                              <div className="seg-control">
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.target === 'bios' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, target: 'bios' })}>
+                                  BIOS
+                                </button>
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.target === 'uefi' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, target: 'uefi' })}>
+                                  UEFI
+                                </button>
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.target === 'both' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, target: 'both' })}>
+                                  Both
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* File System */}
+                            <div className="setting-group">
+                              <label className="setting-label">File system</label>
+                              <div className="seg-control">
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.filesystem === 'fat32' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, filesystem: 'fat32' })}>
+                                  FAT32
+                                </button>
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.filesystem === 'ntfs' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, filesystem: 'ntfs' })}>
+                                  NTFS
+                                </button>
+                                <button type="button"
+                                  className={`seg-btn ${manualSettings.filesystem === 'exfat' ? 'active' : ''}`}
+                                  onClick={() => setManualSettings({ ...manualSettings, filesystem: 'exfat' })}>
+                                  exFAT
+                                </button>
+                              </div>
+                              <div className="setting-hint">
+                                {manualSettings.filesystem === 'fat32' && 'Universal but max 4 GB per file. WIM split auto-enabled for Windows.'}
+                                {manualSettings.filesystem === 'ntfs' && 'No file size limit. Best for Windows ISOs. BIOS boot only.'}
+                                {manualSettings.filesystem === 'exfat' && 'No size limit. Less common but works on most modern systems.'}
+                              </div>
+                            </div>
+
+                            {/* Cluster Size */}
+                            <div className="setting-group">
+                              <label className="setting-label">Cluster size</label>
+                              <select className="setting-input"
+                                value={manualSettings.clusterSize}
+                                onChange={e => setManualSettings({ ...manualSettings, clusterSize: e.target.value })}>
+                                <option value="default">Default (recommended)</option>
+                                <option value="512">512 bytes</option>
+                                <option value="1024">1 KB</option>
+                                <option value="2048">2 KB</option>
+                                <option value="4096">4 KB</option>
+                                <option value="8192">8 KB</option>
+                                <option value="16384">16 KB</option>
+                                <option value="32768">32 KB</option>
+                                <option value="65536">64 KB</option>
+                              </select>
+                            </div>
+
+                            {/* Volume Label */}
+                            <div className="setting-group">
+                              <label className="setting-label">Volume label</label>
+                              <input type="text" className="setting-input"
+                                maxLength={11}
+                                value={manualSettings.label}
+                                onChange={e => setManualSettings({ ...manualSettings, label: e.target.value.toUpperCase() })}
+                                placeholder="FlashOS" />
+                              <div className="setting-hint">Max 11 characters for FAT32, 32 for NTFS/exFAT.</div>
+                            </div>
+
+                            {/* Toggles */}
+                            <div className="setting-group">
+                              <label className="toggle-row">
+                                <input type="checkbox"
+                                  checked={manualSettings.quickFormat}
+                                  onChange={e => setManualSettings({ ...manualSettings, quickFormat: e.target.checked })} />
+                                <span>Quick format</span>
+                                <span className="toggle-hint">Faster, skips bad-block check</span>
+                              </label>
+                              <label className="toggle-row">
+                                <input type="checkbox"
+                                  checked={manualSettings.checkBadBlocks}
+                                  onChange={e => setManualSettings({ ...manualSettings, checkBadBlocks: e.target.checked })} />
+                                <span>Check for bad blocks</span>
+                                <span className="toggle-hint">Slower but verifies the USB is healthy</span>
+                              </label>
+                              <label className="toggle-row">
+                                <input type="checkbox"
+                                  checked={manualSettings.requiresWimSplit}
+                                  onChange={e => setManualSettings({ ...manualSettings, requiresWimSplit: e.target.checked })} />
+                                <span>Split install.wim if larger than 4 GB</span>
+                                <span className="toggle-hint">Required for Windows ISOs on FAT32</span>
+                              </label>
+                            </div>
+
+                            {/* Reset button */}
+                            <button type="button" className="btn-secondary"
+                              onClick={() => {
+                                setManualSettings({
+                                  scheme: partitionSettings.scheme,
+                                  target: partitionSettings.target,
+                                  filesystem: partitionSettings.filesystem,
+                                  clusterSize: 'default',
+                                  label: 'FlashOS',
+                                  quickFormat: true,
+                                  checkBadBlocks: false,
+                                  requiresWimSplit: partitionSettings.requiresWimSplit,
+                                })
+                              }}>
+                              Reset to recommended
+                            </button>
+                          </div>
+                        )}
+
+                        {!manualMode && partitionSettings.notes && partitionSettings.notes.length > 0 && (
                           <div className="partition-notes">
                             {partitionSettings.notes.map((n, i) => <div key={i}>• {n}</div>)}
                           </div>

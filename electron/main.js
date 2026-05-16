@@ -458,9 +458,15 @@ echo "STEP_DONE"
 // disk. Instead we create a single bootable FAT32 partition that supports both
 // UEFI and BIOS boot — same approach Rufus uses by default.
 // ─────────────────────────────────────────────────────────────────────────────
-async function flashWindows({ isoPath, device, scheme, filesystem, requiresWimSplit }, send) {
+async function flashWindows({ isoPath, device, scheme, filesystem, requiresWimSplit, label, clusterSize, quickFormat }, send) {
   const diskNum = device.replace(/[^0-9]/g, '')
   if (!diskNum) throw new Error('Could not extract disk number from ' + device)
+
+  // Use defaults for missing optional fields
+  const volLabel = (label || 'FlashOS').toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 11) || 'FLASHOS'
+  const useQuick = quickFormat !== false  // default true
+  const useScheme = (scheme || 'mbr').toLowerCase()
+  const clusterArg = clusterSize && clusterSize !== 'default' ? ` unit=${clusterSize}` : ''
 
   const workDir = path.join(os.tmpdir(), 'flashos-work-' + Date.now())
   fs.mkdirSync(workDir, { recursive: true })
@@ -474,22 +480,22 @@ async function flashWindows({ isoPath, device, scheme, filesystem, requiresWimSp
     throw new Error(`No free drive letters available. Currently used: ${[...used].sort().join(', ')}`)
   }
   console.log(`[flash] Using drive letter ${dataLetter} for USB`)
+  console.log(`[flash] Settings: scheme=${useScheme}, fs=${filesystem}, label=${volLabel}, quick=${useQuick}, cluster=${clusterSize}`)
 
   try {
     // ── Partition with diskpart ─────────────────────────────────────────
-    // Single bootable FAT32 partition on MBR. FAT32 works for both UEFI and
-    // legacy BIOS boot. This is what Rufus does by default for USB sticks.
-    send('partitioning', 5, `Partitioning disk ${diskNum}`)
+    send('partitioning', 5, `Partitioning disk ${diskNum} as ${useScheme.toUpperCase()}`)
+    const formatLine = `format fs=${filesystem}${useQuick ? ' quick' : ''} label="${volLabel}"${clusterArg}`
     const dpLines = [
       `select disk ${diskNum}`,
       'attributes disk clear readonly',
       'clean',
       'rescan',
       `select disk ${diskNum}`,
-      'convert mbr',
+      `convert ${useScheme}`,
       'create partition primary',
-      'active',
-      `format fs=${filesystem} quick label="FlashOS"`,
+      ...(useScheme === 'mbr' ? ['active'] : []),
+      formatLine,
       `assign letter=${dataLetter}`,
       'exit',
     ]

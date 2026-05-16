@@ -1,12 +1,13 @@
 {
-  "version": 1,
+  "version": 2,
   "updated": "2026-05-16",
   "_note": "Edit this file to add/update OS versions. Push to GitHub and all FlashOS users get the update automatically on next launch.",
 
   "categories": [
     { "id": "all",     "label": "All" },
     { "id": "windows", "label": "Windows" },
-    { "id": "linux",   "label": "Linux" }
+    { "id": "linux",   "label": "Linux" },
+    { "id": "other",   "label": "Other" }
   ],
 
   "badgeColors": {
@@ -439,7 +440,7 @@
       "id": "mxlinux",
       "name": "MX Linux",
       "category": "linux",
-      "color": "#1a1a1a",
+      "color": "#cccccc",
       "icon": "default",
       "description": "Debian-based with XFCE. Top rated on DistroWatch for years running.",
       "editions": [
@@ -498,9 +499,43 @@
       ]
     },
     {
+      "id": "nixos",
+      "name": "NixOS",
+      "category": "linux",
+      "color": "#5277c3",
+      "icon": "default",
+      "description": "Declarative Linux distribution. Reproducible builds, atomic upgrades, rollbacks.",
+      "editions": [
+        {
+          "id": "nixos-gnome",
+          "name": "GNOME",
+          "badge": "stable",
+          "versions": [
+            { "id": "nix-24.11-gnome", "label": "24.11 Vicuna", "arch": "64-bit", "size": "2.7 GB", "sizeBytes": 2900000000, "filename": "nixos-24.11-gnome.iso", "downloadUrl": "https://channels.nixos.org/nixos-24.11/latest-nixos-gnome-x86_64-linux.iso" }
+          ]
+        },
+        {
+          "id": "nixos-plasma",
+          "name": "KDE Plasma",
+          "badge": "stable",
+          "versions": [
+            { "id": "nix-24.11-kde", "label": "24.11 Vicuna", "arch": "64-bit", "size": "2.6 GB", "sizeBytes": 2790000000, "filename": "nixos-24.11-plasma.iso", "downloadUrl": "https://channels.nixos.org/nixos-24.11/latest-nixos-plasma6-x86_64-linux.iso" }
+          ]
+        },
+        {
+          "id": "nixos-minimal",
+          "name": "Minimal (CLI)",
+          "badge": "stable",
+          "versions": [
+            { "id": "nix-24.11-min", "label": "24.11 Minimal", "arch": "64-bit", "size": "950 MB", "sizeBytes": 1000000000, "filename": "nixos-24.11-minimal.iso", "downloadUrl": "https://channels.nixos.org/nixos-24.11/latest-nixos-minimal-x86_64-linux.iso" }
+          ]
+        }
+      ]
+    },
+    {
       "id": "freebsd",
       "name": "FreeBSD",
-      "category": "linux",
+      "category": "other",
       "color": "#990000",
       "icon": "default",
       "description": "Classic Unix-like OS. Powers Netflix, WhatsApp, Sony PlayStation 4 and 5.",
@@ -510,9 +545,9 @@
           "name": "14 Release (current)",
           "badge": "latest",
           "versions": [
-            { "id": "freebsd-14.2-dvd", "label": "14.2 DVD", "arch": "64-bit", "size": "4.4 GB", "sizeBytes": 4720000000, "filename": "freebsd-14.2-dvd.iso", "downloadUrl": "https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.2/FreeBSD-14.2-RELEASE-amd64-dvd1.iso" },
-            { "id": "freebsd-14.1-dvd", "label": "14.1 DVD", "arch": "64-bit", "size": "4.4 GB", "sizeBytes": 4720000000, "filename": "freebsd-14.1-dvd.iso", "downloadUrl": "https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.1/FreeBSD-14.1-RELEASE-amd64-dvd1.iso" },
-            { "id": "freebsd-14.1-mini", "label": "14.1 Bootonly", "arch": "64-bit", "size": "430 MB", "sizeBytes": 450000000, "filename": "freebsd-14.1-bootonly.iso", "downloadUrl": "https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.1/FreeBSD-14.1-RELEASE-amd64-bootonly.iso" }
+            { "id": "freebsd-14.2-dvd",  "label": "14.2 DVD",       "arch": "64-bit", "size": "4.4 GB", "sizeBytes": 4720000000, "filename": "freebsd-14.2-dvd.iso",      "downloadUrl": "https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.2/FreeBSD-14.2-RELEASE-amd64-dvd1.iso" },
+            { "id": "freebsd-14.1-dvd",  "label": "14.1 DVD",       "arch": "64-bit", "size": "4.4 GB", "sizeBytes": 4720000000, "filename": "freebsd-14.1-dvd.iso",      "downloadUrl": "https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.1/FreeBSD-14.1-RELEASE-amd64-dvd1.iso" },
+            { "id": "freebsd-14.1-mini", "label": "14.1 Bootonly",  "arch": "64-bit", "size": "430 MB", "sizeBytes": 450000000,  "filename": "freebsd-14.1-bootonly.iso", "downloadUrl": "https://download.freebsd.org/releases/amd64/amd64/ISO-IMAGES/14.1/FreeBSD-14.1-RELEASE-amd64-bootonly.iso" }
           ]
         },
         {
@@ -528,7 +563,7 @@
     {
       "id": "openbsd",
       "name": "OpenBSD",
-      "category": "linux",
+      "category": "other",
       "color": "#ffce00",
       "icon": "default",
       "description": "Security-focused Unix-like OS. Famous for OpenSSH, OpenSMTPD, OpenNTPD.",
@@ -547,7 +582,7 @@
     {
       "id": "netbsd",
       "name": "NetBSD",
-      "category": "linux",
+      "category": "other",
       "color": "#ff6600",
       "icon": "default",
       "description": "Highly portable Unix-like OS. Famous for running on almost any hardware ever made.",
@@ -559,7 +594,7 @@
           "versions": [
             { "id": "netbsd-10.1", "label": "10.1", "arch": "64-bit", "size": "660 MB", "sizeBytes": 700000000, "filename": "netbsd-10.1.iso", "downloadUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-10.1/images/NetBSD-10.1-amd64.iso" },
             { "id": "netbsd-10.0", "label": "10.0", "arch": "64-bit", "size": "650 MB", "sizeBytes": 690000000, "filename": "netbsd-10.0.iso", "downloadUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-10.0/images/NetBSD-10.0-amd64.iso" },
-            { "id": "netbsd-9.4", "label": "9.4", "arch": "64-bit", "size": "620 MB", "sizeBytes": 660000000, "filename": "netbsd-9.4.iso", "downloadUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-9.4/images/NetBSD-9.4-amd64.iso" }
+            { "id": "netbsd-9.4",  "label": "9.4",  "arch": "64-bit", "size": "620 MB", "sizeBytes": 660000000, "filename": "netbsd-9.4.iso",  "downloadUrl": "https://cdn.netbsd.org/pub/NetBSD/NetBSD-9.4/images/NetBSD-9.4-amd64.iso" }
           ]
         }
       ]
@@ -567,7 +602,7 @@
     {
       "id": "haiku",
       "name": "Haiku",
-      "category": "linux",
+      "category": "other",
       "color": "#00b150",
       "icon": "default",
       "description": "An open source successor to BeOS. Fast, lightweight, single-user OS.",
@@ -585,7 +620,7 @@
     {
       "id": "reactos",
       "name": "ReactOS",
-      "category": "linux",
+      "category": "other",
       "color": "#0066cc",
       "icon": "default",
       "description": "Open source OS designed to run Windows applications. Looks and feels like Windows.",
@@ -611,7 +646,7 @@
     {
       "id": "freedos",
       "name": "FreeDOS",
-      "category": "linux",
+      "category": "other",
       "color": "#7e2b3a",
       "icon": "default",
       "description": "Modern continuation of MS-DOS. For retro gaming, BIOS flashing, embedded systems.",
