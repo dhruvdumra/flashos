@@ -583,8 +583,13 @@ export const bundledCatalog = {
  */
 export async function fetchRemoteCatalog() {
   try {
+    // Cache-bust with current timestamp so we never get a stale GitHub copy
+    const url = `${REMOTE_CATALOG_URL}?t=${Date.now()}`
     console.log('[catalog] Fetching remote catalog from GitHub...')
-    const res = await fetch(REMOTE_CATALOG_URL, { cache: 'no-store' })
+    const res = await fetch(url, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
+    })
     if (!res.ok) {
       console.warn(`[catalog] Remote returned HTTP ${res.status}`)
       return null
