@@ -47,8 +47,9 @@ Go to the [**Releases**](../../releases/latest) page and download the installer 
 
 ## Screenshots
 
-> <img width="1366" height="729" alt="1" src="https://github.com/user-attachments/assets/a4d7922b-acd4-46d7-aa0d-4befff9c4d88" />
-<img width="1365" height="728" alt="2" src="https://github.com/user-attachments/assets/76c1cc20-91ca-433b-b7f0-3425aa516f65" />
+<img width="1366" height="731" alt="1" src="https://github.com/user-attachments/assets/76fd48cb-fe98-4a0e-9d29-f3a2d47c0be2" />
+<img width="1363" height="725" alt="2" src="https://github.com/user-attachments/assets/fd95701e-1810-4762-af21-ba1478a37871" />
+
 
 
 
