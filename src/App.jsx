@@ -780,7 +780,7 @@ export default function App() {
                     {edition.versions.map(version => (
                       <button key={version.id} type="button" className="version-card"
                         onClick={() => handlePickVersion(drawerOs, edition, version)}>
-                        <div className="version-label">{version.label}</div>
+                        <div cdslassName="version-label">{version.label}</div>
                         <div className="version-meta">{version.arch} · {version.size}</div>
                         {version.downloadUrl.includes('YOUR_URL_HERE') && (
                           <div className="version-warn">URL not set</div>
@@ -803,7 +803,7 @@ export default function App() {
             <div className="modal-title">Erase {selectedDrive?.name}?</div>
             <div className="modal-body">
               All data on this USB drive will be permanently deleted. This action cannot be undone.
-              <br /><br />
+             docum <br /><br />
               Device: <strong>{selectedDrive?.device}</strong><br />
               Size: <strong>{selectedDrive?.size}</strong>
             </div>
