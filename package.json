@@ -1,16 +1,24 @@
 {
   "name": "flashos",
-  "author": "Dhruv Dumra",
-  "version": "1.0.0",
-  "description": "One-click OS downloader and USB flasher",
+  "version": "1.1.0",
+  "description": "Cross-platform OS downloader and USB flasher. GUI and CLI.",
   "main": "electron/main.js",
+  "bin": {
+    "flashos": "cli/index.js"
+  },
   "scripts": {
     "dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "build": "vite build && electron-builder",
     "vite": "vite",
-    "electron": "electron ."
+    "electron": "electron .",
+    "cli": "node cli/index.js",
+    "build:cli": "pkg cli/index.js --targets node18-win-x64,node18-linux-x64,node18-macos-x64 --out-path dist-cli"
   },
   "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "inquirer": "^8.2.6",
+    "ora": "^5.4.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
@@ -19,8 +27,14 @@
     "concurrently": "^8.0.0",
     "electron": "^28.0.0",
     "electron-builder": "^24.0.0",
+    "pkg": "^5.8.1",
     "vite": "^5.0.0",
     "wait-on": "^7.0.0"
+  },
+  "pkg": {
+    "scripts": ["cli/core/*.js"],
+    "assets": [],
+    "targets": ["node18-win-x64", "node18-linux-x64", "node18-macos-x64"]
   },
   "build": {
     "appId": "com.flashos.app",
