@@ -155,7 +155,9 @@ Full CLI documentation in [`cli/README.md`](cli/README.md).
 
 ## Screenshots
 
-> *(Add screenshots here — drag images into the GitHub editor to upload)*
+<img width="1366" height="731" alt="1" src="https://github.com/user-attachments/assets/ccf40e06-14c2-4728-ae26-9040c26ccd50" />
+<img width="1363" height="725" alt="2" src="https://github.com/user-attachments/assets/67274a2b-271d-4a4f-b3fa-53e7e63af0e5" />
+
 
 ---
 
